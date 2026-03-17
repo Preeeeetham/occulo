@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "module": "None",
+    "strict": true,
+    "noImplicitAny": true,
+    "outFile": "main.js",
+    "removeComments": false,
+    "sourceMap": false,
+    "lib": ["ES2017", "DOM", "DOM.Iterable"]
+  },
+  "include": ["src/**/*.ts"]
+}

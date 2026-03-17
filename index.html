@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OCCULO</title>
+  <meta name="description" content="OCCULO — spatial intelligence for anywhere people gather." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+</head>
+
+<body>
+
+  <!-- NAV -->
+  <nav id="nav">
+    <div class="nav-inner">
+      <span class="nav-brand">OCCULO</span>
+      <a href="#contact" class="nav-cta">Contact</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section id="hero">
+    <canvas id="heroCanvas" aria-hidden="true"></canvas>
+    <div class="container hero-content">
+      <p class="hero-eyebrow" data-reveal>Spatial Intelligence</p>
+      <h1 id="heroTitle">
+        <span class="line" data-reveal data-delay="0">Space.</span>
+        <span class="line line--em" data-reveal data-delay="130">Now intelligent.</span>
+        <span class="line line--muted" data-reveal data-delay="260">Absolute environmental awareness.</span>
+      </h1>
+      <p class="hero-sub" data-reveal data-delay="400">
+        OCCULO gives physical spaces the ability to understand themselves.
+        Instantly know how any environment is being used — without counting a single person.
+      </p>
+      <div class="hero-actions" data-reveal data-delay="500">
+        <a href="#what" class="btn btn--white">How it works</a>
+        <a href="#contact" class="btn btn--ghost">Reach us</a>
+      </div>
+    </div>
+    <div class="hero-rule"><span id="heroRule"></span></div>
+  </section>
+
+  <!-- CONTEXT — where we operate -->
+  <section id="context" class="section">
+    <div class="container">
+      <div class="context-intro" data-reveal>
+        <p class="section-label">Where we operate</p>
+        <p class="context-statement">
+          Overcrowding doesn't happen only in buildings.
+          It happens wherever people move — and wherever the space
+          around them is not understood.
+        </p>
+      </div>
+
+      <ul class="context-list" aria-label="Environments where OCCULO operates">
+        <li class="context-item" data-reveal data-delay="0">
+          <span class="ci-index">—</span>
+          <span class="ci-env">Transit hubs &amp; stations</span>
+          <span class="ci-note">Platforms, concourses, interchange zones</span>
+        </li>
+        <li class="context-item" data-reveal data-delay="60">
+          <span class="ci-index">—</span>
+          <span class="ci-env">Public venues &amp; arenas</span>
+          <span class="ci-note">Entrances, exits, corridors under event load</span>
+        </li>
+        <li class="context-item" data-reveal data-delay="120">
+          <span class="ci-index">—</span>
+          <span class="ci-env">Commercial &amp; institutional spaces</span>
+          <span class="ci-note">Lobbies, elevators, stairwells, shared zones</span>
+        </li>
+        <li class="context-item" data-reveal data-delay="180">
+          <span class="ci-index">—</span>
+          <span class="ci-env">Outdoor &amp; semi-enclosed environments</span>
+          <span class="ci-note">Markets, queues, gathering points</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- WHAT WE DO — editorial vertical list -->
+  <section id="what" class="section section--dark">
+    <div class="container">
+
+      <div class="what-intro" data-reveal>
+        <p class="section-label section-label--dim">What we do</p>
+        <h2 class="h2--light">
+          We give space a sense of itself.
+        </h2>
+      </div>
+
+      <div class="what-list">
+
+        <div class="what-row" data-reveal data-delay="0">
+          <div class="wr-left">
+            <span class="wr-num">01</span>
+            <h3>Space-based analysis,<br />not headcount</h3>
+          </div>
+          <div class="wr-right">
+            <p>
+              Existing systems count people. We measure how a space is occupied —
+              its density, its distribution, its available capacity at any given moment.
+              Counting arrivals tells you who entered. Spatial analysis tells you
+              whether the space can safely absorb more.
+            </p>
+          </div>
+        </div>
+
+        <div class="what-row" data-reveal data-delay="60">
+          <div class="wr-left">
+            <span class="wr-num">02</span>
+            <h3>Signals that arrive<br />before the incident</h3>
+          </div>
+          <div class="wr-right">
+            <p>
+              Overcrowding is not an event. It is a condition that builds.
+              OCCULO reads that condition continuously — so the people responsible
+              for a space can act on it while there is still time to act.
+            </p>
+          </div>
+        </div>
+
+        <div class="what-row" data-reveal data-delay="120">
+          <div class="wr-left">
+            <span class="wr-num">03</span>
+            <h3>Retrofit into<br />existing environments</h3>
+          </div>
+          <div class="wr-right">
+            <p>
+              OCCULO is designed to be added to an environment, not to replace it.
+              It integrates with what is already operational.
+              No structural changes. No extended deployment windows.
+            </p>
+          </div>
+        </div>
+
+        <div class="what-row" data-reveal data-delay="180">
+          <div class="wr-left">
+            <span class="wr-num">04</span>
+            <h3>No personal data,<br />by design</h3>
+          </div>
+          <div class="wr-right">
+            <p>
+              Spatial analysis does not require identity.
+              OCCULO processes environmental conditions — density, distribution, flow —
+              not individuals. No faces. No tracking. No data that could be personal.
+            </p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- STATEMENT — typographic, no box -->
+  <section id="principle" class="section section--statement">
+    <div class="container">
+      <p class="statement-line" data-reveal>
+        Every major crowd incident has one thing in common.
+      </p>
+      <p class="statement-line statement-line--bold" data-reveal data-delay="100">
+        The space was full before anyone in charge knew it was full.
+      </p>
+      <p class="statement-line statement-line--faint" data-reveal data-delay="200">
+        That is the problem we exist to solve.
+      </p>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" class="section">
+    <div class="container">
+
+      <div class="contact-head" data-reveal>
+        <h2>Let's talk.</h2>
+        <p>
+          We work with operators, safety teams, and engineers who manage
+          spaces where crowds are a reality — not an exception.
+        </p>
+        <a href="mailto:contact@occulo.co" class="contact-email">contact@occulo.co</a>
+      </div>
+
+      <form id="contactForm" novalidate data-reveal data-delay="100">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="userName">Name</label>
+            <input type="text" id="userName" name="user_name" placeholder="Your name" autocomplete="name" required />
+          </div>
+          <div class="form-group">
+            <label for="userEmail">Email</label>
+            <input type="email" id="userEmail" name="user_email" placeholder="you@domain.com" autocomplete="email"
+              required />
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="userMsg">Message</label>
+          <textarea id="userMsg" name="message" rows="5" placeholder="Describe your environment or inquiry…"
+            required></textarea>
+        </div>
+        <div class="form-footer">
+          <button type="submit" id="formBtn">Send</button>
+          <span id="formStatus" aria-live="polite"></span>
+        </div>
+      </form>
+
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="container footer-inner">
+      <span class="footer-brand">OCCULO</span>
+      <span class="footer-copy">© OCCULO</span>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
+</html>
