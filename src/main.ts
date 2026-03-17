@@ -133,6 +133,16 @@ function qsa<T extends Element>(selector: string, root: ParentNode = document): 
   const sections = qsa<HTMLElement>('section[id]');
   const navCta = document.querySelector<HTMLAnchorElement>('.nav-cta');
   if (!navCta) return;
+
+  // Prevent URL change and scroll smoothly
+  navCta.addEventListener('click', (e) => {
+    e.preventDefault();
+    const contactSection = document.getElementById('contact');
+    if (contactSection) {
+      contactSection.scrollIntoView({ behavior: 'smooth' });
+    }
+  });
+
   const onScroll = () => {
     let current = '';
     sections.forEach(sec => {
