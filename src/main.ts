@@ -1,8 +1,8 @@
 // OCCULO — main.ts
 // Animations: hero line reveal, liquid canvas flow, scroll fade-ins, EmailJS
 
-const EMAILJS_PUBLIC_KEY  = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
-const EMAILJS_SERVICE_ID  = import.meta.env.VITE_EMAILJS_SERVICE_ID;
+const EMAILJS_PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
+const EMAILJS_SERVICE_ID = import.meta.env.VITE_EMAILJS_SERVICE_ID;
 const EMAILJS_TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
 
 declare const emailjs: {
@@ -131,7 +131,7 @@ function qsa<T extends Element>(selector: string, root: ParentNode = document): 
 
 (function initActiveSection(): void {
   const sections = qsa<HTMLElement>('section[id]');
-  const navCta   = document.querySelector<HTMLAnchorElement>('.nav-cta');
+  const navCta = document.querySelector<HTMLAnchorElement>('.nav-cta');
   if (!navCta) return;
   const onScroll = () => {
     let current = '';
@@ -173,18 +173,18 @@ function qsa<T extends Element>(selector: string, root: ParentNode = document): 
 })();
 
 (function initForm(): void {
-  const form   = document.getElementById('contactForm') as HTMLFormElement | null;
-  const btn    = document.getElementById('formBtn')     as HTMLButtonElement | null;
-  const status = document.getElementById('formStatus')  as HTMLElement | null;
+  const form = document.getElementById('contactForm') as HTMLFormElement | null;
+  const btn = document.getElementById('formBtn') as HTMLButtonElement | null;
+  const status = document.getElementById('formStatus') as HTMLElement | null;
   if (!form || !btn || !status) return;
 
   let lastSentTime = 0;
 
   // Remove red border instantly when user starts typing
   const fields = [
-    form.elements.namedItem('user_name')  as HTMLInputElement,
+    form.elements.namedItem('user_name') as HTMLInputElement,
     form.elements.namedItem('user_email') as HTMLInputElement,
-    form.elements.namedItem('message')    as HTMLTextAreaElement
+    form.elements.namedItem('message') as HTMLTextAreaElement
   ];
   fields.forEach(field => {
     if (field) field.addEventListener('input', () => field.classList.remove('input-error'));
@@ -200,16 +200,16 @@ function qsa<T extends Element>(selector: string, root: ParentNode = document): 
       return;
     }
 
-    const nameInput  = form.elements.namedItem('user_name')  as HTMLInputElement;
+    const nameInput = form.elements.namedItem('user_name') as HTMLInputElement;
     const emailInput = form.elements.namedItem('user_email') as HTMLInputElement;
-    const msgInput   = form.elements.namedItem('message')    as HTMLTextAreaElement;
+    const msgInput = form.elements.namedItem('message') as HTMLTextAreaElement;
 
     // Clear previous errors
     [nameInput, emailInput, msgInput].forEach(el => el.classList.remove('input-error'));
 
-    const name  = nameInput.value.trim();
+    const name = nameInput.value.trim();
     const email = emailInput.value.trim();
-    const msg   = msgInput.value.trim();
+    const msg = msgInput.value.trim();
 
     if (!name || !email || !msg) {
       status.textContent = 'Please fill in all fields.';
@@ -227,18 +227,18 @@ function qsa<T extends Element>(selector: string, root: ParentNode = document): 
       return;
     }
 
-    btn.disabled    = true;
+    btn.disabled = true;
     btn.textContent = 'Sending…';
     status.textContent = '';
 
     try {
       await emailjs.sendForm(EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, form);
-      
-      btn.textContent    = 'Sent ✓';
+
+      btn.textContent = 'Sent ✓';
       status.textContent = 'Message received. We will respond shortly.';
       lastSentTime = Date.now(); // Record success time
       form.reset();
-      
+
       // Re-enable button gracefully after 3 seconds so it's not permanently locked
       setTimeout(() => {
         btn.disabled = false;
@@ -246,7 +246,7 @@ function qsa<T extends Element>(selector: string, root: ParentNode = document): 
       }, 3000);
 
     } catch (err) {
-      btn.disabled    = false;
+      btn.disabled = false;
       btn.textContent = 'Send message';
       status.textContent = 'Something went wrong. Try emailing us directly.';
       console.error('EmailJS error:', err);
