@@ -31,7 +31,7 @@ export default function App() {
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormStatus("loading");
-    
+
     try {
       const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
         method: "POST",
@@ -48,7 +48,7 @@ export default function App() {
           }
         })
       });
-      
+
       if (res.ok) {
         setFormStatus("success");
         setTimeout(() => {
@@ -66,14 +66,14 @@ export default function App() {
       setFormStatus("error");
     }
   };
-  
+
   // Scroll parallax for the hero section
   const heroRef = useRef(null);
   const { scrollYProgress: heroScroll } = useScroll({
     target: heroRef,
     offset: ["start start", "end start"],
   });
-  
+
   const heroY = useTransform(heroScroll, [0, 1], [0, 200]);
   const heroOpacity = useTransform(heroScroll, [0, 0.8], [1, 0]);
 
@@ -112,7 +112,7 @@ export default function App() {
               className="fixed top-0 right-0 h-full w-full md:max-w-md bg-white z-[110] shadow-2xl overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
             >
               <div className="p-8 md:p-12 relative flex flex-col min-h-full">
-                <button 
+                <button
                   onClick={() => setIsContactOpen(false)}
                   className="absolute top-8 right-8 p-2 rounded-full hover:bg-gray-100 transition-colors"
                 >
@@ -137,23 +137,23 @@ export default function App() {
                     <form className="flex flex-col gap-6" onSubmit={handleEmailSubmit}>
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Name</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           required
                           value={formState.name}
-                          onChange={(e) => setFormState({...formState, name: e.target.value})}
+                          onChange={(e) => setFormState({ ...formState, name: e.target.value })}
                           placeholder="Your name"
                           className="w-full pb-3 border-b border-gray-200 outline-none focus:border-[#2c6bde] transition-colors bg-transparent placeholder:text-gray-300"
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Email</label>
-                        <input 
-                          type="email" 
+                        <input
+                          type="email"
                           required
                           value={formState.email}
-                          onChange={(e) => setFormState({...formState, email: e.target.value})}
+                          onChange={(e) => setFormState({ ...formState, email: e.target.value })}
                           placeholder="name@company.com"
                           className="w-full pb-3 border-b border-gray-200 outline-none focus:border-[#2c6bde] transition-colors bg-transparent placeholder:text-gray-300"
                         />
@@ -161,10 +161,10 @@ export default function App() {
 
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Company</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={formState.company}
-                          onChange={(e) => setFormState({...formState, company: e.target.value})}
+                          onChange={(e) => setFormState({ ...formState, company: e.target.value })}
                           placeholder="Company name"
                           className="w-full pb-3 border-b border-gray-200 outline-none focus:border-[#2c6bde] transition-colors bg-transparent placeholder:text-gray-300"
                         />
@@ -172,10 +172,10 @@ export default function App() {
 
                       <div>
                         <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Message</label>
-                        <textarea 
+                        <textarea
                           rows={4}
                           value={formState.message}
-                          onChange={(e) => setFormState({...formState, message: e.target.value})}
+                          onChange={(e) => setFormState({ ...formState, message: e.target.value })}
                           placeholder="How can we help?"
                           className="w-full py-3 border-b border-gray-200 outline-none focus:border-[#2c6bde] transition-colors bg-transparent placeholder:text-gray-300 resize-none"
                         />
@@ -217,8 +217,8 @@ export default function App() {
         }}
       >
         <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <motion.a 
-            href="#" 
+          <motion.a
+            href="#"
             className="flex items-center gap-2.5"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -257,7 +257,7 @@ export default function App() {
         className="relative min-h-screen flex items-center justify-center px-6 md:px-10 overflow-hidden"
         style={{ background: "#2c6bde" }}
       >
-        <motion.div 
+        <motion.div
           className="max-w-4xl mx-auto text-center text-white pt-24 relative z-10"
           style={{ y: heroY, opacity: heroOpacity }}
           variants={staggerContainer}
@@ -318,7 +318,7 @@ export default function App() {
         </motion.div>
 
         {/* Ambient grain / subtle glow in background */}
-        <div 
+        <div
           className="absolute inset-0 pointer-events-none opacity-40 mix-blend-overlay"
           style={{
             background: "radial-gradient(circle at 50% 0%, rgba(255,255,255,0.4) 0%, transparent 70%)"
@@ -345,7 +345,7 @@ export default function App() {
 
       {/* ───────── The Problem ───────── */}
       <section className="py-32 md:py-48 px-6 md:px-10" style={{ background: "#f4f4f4" }}>
-        <motion.div 
+        <motion.div
           className="max-w-5xl mx-auto"
           variants={staggerContainer}
           initial="hidden"
@@ -398,9 +398,9 @@ export default function App() {
                 custom={i}
                 variants={{
                   hidden: { opacity: 0, x: 250, y: 50, rotate: 15, scale: 0.85 },
-                  visible: { 
+                  visible: {
                     opacity: 1, x: 0, y: 0, rotate: 0, scale: 1,
-                    transition: { type: "spring", damping: 18, stiffness: 75, delay: i * 0.15 } 
+                    transition: { type: "spring", damping: 18, stiffness: 75, delay: i * 0.15 }
                   }
                 }}
                 whileHover={{ y: -8, boxShadow: "0 20px 40px rgba(0,0,0,0.06)", scale: 1.02 }}
@@ -462,7 +462,7 @@ export default function App() {
                 style={{ color: "#666", lineHeight: 1.6 }}
               >
                 Occulo deploys AI-powered edge sensors that detect occupancy in
-                real-time with 95%+ accuracy. No cameras. No wearables. No
+                real-time with 95%+ accuracy. No wearables. No
                 disruption. Plug in, calibrate, and let the space orchestrate
                 itself.
               </motion.p>
@@ -471,7 +471,7 @@ export default function App() {
                 {[
                   { icon: Eye, text: "95%+ detection accuracy in dynamic environments" },
                   { icon: Zap, text: "Deploy in hours, not months — true plug-and-play" },
-                  { icon: Shield, text: "Privacy-first design — no cameras, no facial recognition" },
+                  { icon: Shield, text: "Privacy-first design — no cloud, no facial recognition" },
                 ].map(({ icon: Icon, text }, i) => (
                   <motion.div
                     key={i}
@@ -511,7 +511,7 @@ export default function App() {
       <section className="py-32 md:py-48 px-6 md:px-10 overflow-hidden relative" style={{ background: "#2c6bde" }}>
         {/* Subtle background decoration */}
         <div className="absolute top-0 right-0 w-full h-full overflow-hidden pointer-events-none">
-          <motion.div 
+          <motion.div
             className="absolute -right-[20%] -top-[20%] w-[60%] h-[100%] rounded-full bg-white opacity-5 blur-[120px]"
             animate={{ scale: [1, 1.1, 1], rotate: [0, 5, 0] }}
             transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
@@ -586,7 +586,7 @@ export default function App() {
 
       {/* ───────── Industries ───────── */}
       <section className="py-28 md:py-40 px-6 md:px-10" style={{ background: "#f4f4f4" }}>
-        <motion.div 
+        <motion.div
           className="max-w-4xl mx-auto text-center"
           variants={staggerContainer}
           initial="hidden"
@@ -654,14 +654,14 @@ export default function App() {
             <br />
             your space?
           </motion.h2>
-          <motion.p 
+          <motion.p
             variants={fadeUp}
-            className="text-lg md:text-xl text-white/40 mb-16" 
+            className="text-lg md:text-xl text-white/40 mb-16"
             style={{ lineHeight: 1.6 }}
           >
             Join the buildings that already think for themselves.
           </motion.p>
-          
+
           <motion.div variants={fadeUp} className="mb-24">
             <motion.button
               onClick={() => setIsContactOpen(true)}
@@ -677,7 +677,7 @@ export default function App() {
           </motion.div>
 
           {/* Unified Footer bar */}
-          <motion.div 
+          <motion.div
             variants={fadeUp}
             className="pt-8 mt-12 flex flex-col md:flex-row items-center justify-between gap-8 md:gap-6"
             style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
