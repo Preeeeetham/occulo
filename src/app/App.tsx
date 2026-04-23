@@ -473,21 +473,21 @@ export default function App() {
             AI-powered spatial intelligence for smarter buildings
           </motion.p>
 
-<motion.h1
-  variants={fadeUp}
-  className="relative z-10 text-center text-white"
-  style={{
-    fontSize: "clamp(2rem, 4.5vw, 4rem)",
-    lineHeight: 1.1,
-    letterSpacing: "-0.03em",
-    fontWeight: 700,
-    textWrap: "balance",
-    maxWidth: "16ch",
-    margin: "0 auto",
-  }}
->
-  Real-Time Reduction in Elevator Overcrowding & Wait Times
-</motion.h1>
+          <motion.h1
+            variants={fadeUp}
+            className="relative z-10 text-center text-white"
+            style={{
+              fontSize: "clamp(2rem, 4.5vw, 4rem)",
+              lineHeight: 1.1,
+              letterSpacing: "-0.03em",
+              fontWeight: 700,
+              textWrap: "balance",
+              maxWidth: "16ch",
+              margin: "0 auto",
+            }}
+          >
+            Real-Time Reduction in Elevator Overcrowding & Wait Times
+          </motion.h1>
 
           <motion.p
             variants={fadeUp}
