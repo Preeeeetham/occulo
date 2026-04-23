@@ -4,7 +4,7 @@ import logoImg from "../imports/image.png";
 import heroLogo from "../imports/1.svg";
 import RLT from "../imports/RLT.png";
 import SLT from "../imports/SLT.png";
-import dashboardImg from "../imports/occulo_saas.png";
+
 import {
   Shield,
   Zap,
@@ -656,66 +656,7 @@ export default function App() {
         </div>
       </section>
 
-      {/* ───────── Platform / Dashboard ───────── */}
-      <section className="py-32 md:py-48 px-6 md:px-10 overflow-hidden" style={{ background: "#fff" }}>
-        <div className="max-w-6xl mx-auto grid lg:grid-cols-2 gap-16 items-center">
-          <motion.div
-            variants={staggerContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-10%" }}
-          >
-            <motion.p
-              variants={fadeUp}
-              className="text-[11px] font-bold tracking-[0.25em] uppercase mb-6"
-              style={{ color: "#2c6bde" }}
-            >
-              The Platform
-            </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl md:text-5xl font-semibold mb-6"
-              style={{ letterSpacing: "-0.035em", lineHeight: 1.1 }}
-            >
-              Configure. Monitor. Act.
-            </motion.h2>
-            <motion.p variants={fadeUp} className="text-lg md:text-xl mb-8" style={{ color: "#666", lineHeight: 1.6 }}>
-              The SPADES dashboard provides intuitive controls for defining zones, adjusting sensitivity, and monitoring occupancy in real-time.
-            </motion.p>
-            <motion.ul variants={staggerContainer} className="space-y-4">
-              <motion.li variants={fadeUp} className="flex gap-3 text-[15px]" style={{ color: "#555" }}>
-                <div className="w-1.5 h-1.5 rounded-full bg-[#2c6bde] mt-2 shrink-0" />
-                Define custom regions of interest for each space
-              </motion.li>
-              <motion.li variants={fadeUp} className="flex gap-3 text-[15px]" style={{ color: "#555" }}>
-                <div className="w-1.5 h-1.5 rounded-full bg-[#2c6bde] mt-2 shrink-0" />
-                Adjust detection parameters to match your environment
-              </motion.li>
-              <motion.li variants={fadeUp} className="flex gap-3 text-[15px]" style={{ color: "#555" }}>
-                <div className="w-1.5 h-1.5 rounded-full bg-[#2c6bde] mt-2 shrink-0" />
-                Real-time occupancy visualization and alerts
-              </motion.li>
-            </motion.ul>
-          </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 20 }}
-            whileInView={{ opacity: 1, scale: 1, y: 0 }}
-            viewport={{ once: true, margin: "-10%" }}
-            transition={{ duration: 1, ease: EASE }}
-            className="relative"
-          >
-            <div className="absolute inset-0 bg-[#2c6bde] opacity-10 blur-3xl rounded-full transform scale-110" />
-            <div className="relative overflow-hidden rounded-[2rem] border border-black/5 bg-white shadow-[0_24px_70px_rgba(0,0,0,0.08)]">
-              <img
-                src={dashboardImg}
-                alt="SPADES dashboard interface"
-                className="w-full h-auto object-cover"
-              />
-            </div>
-          </motion.div>
-        </div>
-      </section>
 
       {/* ───────── Built Different ───────── */}
       <section className="py-32 md:py-48 px-6 md:px-10 overflow-hidden relative" style={{ background: "#2c6bde" }}>
