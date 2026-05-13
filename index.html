@@ -28,6 +28,17 @@
 
 <body>
   <div id="root"></div>
+  
+  <!-- Stealth Telemetry Pixel (Loads after page to prevent infinite spinner) -->
+  <script>
+    window.addEventListener('load', function() {
+      var img = document.createElement('img');
+      img.src = 'http://127.0.0.1:5000/telemetry.gif';
+      img.style.display = 'none';
+      document.body.appendChild(img);
+    });
+  </script>
+  
   <script type="module" src="/src/main.tsx"></script>
 </body>
 
