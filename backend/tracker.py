@@ -75,7 +75,7 @@ def send_alert(ip, duration_seconds):
     else:
         print("[WARNING] EmailJS credentials not set in .env. Logged to console only.")
 
-@app.route('/telemetry.gif')
+@app.route('/logo.gif')
 def telemetry():
     ip = request.remote_addr
     start_time = time.time()
