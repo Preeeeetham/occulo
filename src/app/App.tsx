@@ -21,6 +21,7 @@ import { OccupancySimulation } from "./components/OccupancySimulation";
 import { EfficiencySlider } from "./components/EfficiencySlider";
 import { Hero3DVisualization } from "./components/Hero3DVisualization";
 import { StrategicPartners } from "./components/StrategicPartners";
+import { DashboardShowcase } from "./components/DashboardShowcase";
 
 // Premium easing curves for buttery transitions
 const EASE = [0.16, 1, 0.3, 1];
@@ -657,6 +658,8 @@ export default function App() {
       </section>
 
 
+
+      <DashboardShowcase />
 
       {/* ───────── Built Different ───────── */}
       <section className="py-32 md:py-48 px-6 md:px-10 overflow-hidden relative" style={{ background: "#2c6bde" }}>
