@@ -135,7 +135,7 @@ export function DashboardShowcase() {
                 <div className="aspect-video bg-black overflow-hidden relative">
                   <video
                     ref={videoRef}
-                    src="https://pub-06550b23f5e34caba3a8cf8c9189e1ea.r2.dev/SaaS.mp4"
+                    src="https://assets.occulo.co/SaaS.mp4"
                     autoPlay
                     muted
                     loop
