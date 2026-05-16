@@ -1,4 +1,5 @@
-import os, json, sqlite3, requests, uuid, time
+import os, json, psycopg2, requests, uuid, time
+from psycopg2.extras import RealDictCursor
 from datetime import datetime, timezone
 from flask import Flask, request, Response, jsonify, session, redirect, url_for, render_template
 from flask_cors import CORS
@@ -11,11 +12,18 @@ load_dotenv()
 os.environ['AUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__)
+from werkzeug.middleware.proxy_fix import ProxyFix
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 app.secret_key = os.getenv("SECRET_KEY", "occulo_fallback_secret_dev_only")
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 CORS(app)
 
-ADMIN_EMAIL = "levakupreetham@gmail.com"
+# Load allowed emails from .env, split by comma, and clean up whitespace
+_env_emails = os.getenv("ALLOWED_EMAILS", "")
+ALLOWED_EMAILS = [e.strip().lower() for e in _env_emails.split(",") if e.strip()]
+
+
 
 oauth = OAuth(app)
 google = oauth.register(
@@ -26,35 +34,36 @@ google = oauth.register(
     client_kwargs={'scope': 'openid email profile'}
 )
 
-DATABASE_PATH = os.getenv("DATABASE_PATH", "data/tracker.db")
-db_dir = os.path.dirname(DATABASE_PATH)
-if db_dir: os.makedirs(db_dir, exist_ok=True)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 PIXEL_GIF = b'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 START_TIME = time.time()
 
 def get_db():
-    conn = sqlite3.connect(DATABASE_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL)
     return conn
 
 def ensure_col(conn, tbl, col, defn):
-    cols = {r[1] for r in conn.execute(f'PRAGMA table_info({tbl})').fetchall()}
-    if col not in cols: conn.execute(f'ALTER TABLE {tbl} ADD COLUMN {col} {defn}')
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name='{tbl}' AND column_name='{col}'")
+        if not cur.fetchone():
+            cur.execute(f'ALTER TABLE {tbl} ADD COLUMN {col} {defn}')
 
 def init_db():
-    with get_db() as c:
-        c.execute('''CREATE TABLE IF NOT EXISTS sessions (
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute('''CREATE TABLE IF NOT EXISTS sessions (
             id TEXT PRIMARY KEY, country TEXT, region TEXT, device TEXT,
-            duration_sec INTEGER DEFAULT 0, date TEXT, hour INTEGER, timestamp DATETIME,
-            path TEXT, last_event TEXT, updated_at DATETIME)''')
-        c.execute('''CREATE TABLE IF NOT EXISTS inquiries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT, message TEXT,
+            duration_sec INTEGER DEFAULT 0, date TEXT, hour INTEGER, timestamp TIMESTAMPTZ,
+            path TEXT, last_event TEXT, updated_at TIMESTAMPTZ)''')
+        cur.execute('''CREATE TABLE IF NOT EXISTS inquiries (
+            id SERIAL PRIMARY KEY, name TEXT, email TEXT, message TEXT,
             company TEXT, phone TEXT, inquiry_type TEXT,
-            country TEXT, device TEXT, timestamp DATETIME)''')
-        for col in ['path','last_event','updated_at']: ensure_col(c,'sessions',col,'TEXT')
-        for col in ['company','phone','inquiry_type']: ensure_col(c,'inquiries',col,'TEXT')
-        c.commit()
+            country TEXT, device TEXT, timestamp TIMESTAMPTZ)''')
+    for col in ['path','last_event','updated_at']: ensure_col(conn,'sessions',col,'TEXT')
+    for col in ['company','phone','inquiry_type']: ensure_col(conn,'inquiries',col,'TEXT')
+    conn.commit()
+    conn.close()
 init_db()
 
 def no_store(resp):
@@ -101,13 +110,24 @@ def login():
 
 @app.route('/auth/callback')
 def callback():
-    token = google.authorize_access_token()
-    resp = google.get('https://openidconnect.googleapis.com/v1/userinfo')
-    user = resp.json()
-    if user.get('email') != ADMIN_EMAIL:
+    try:
+        token = google.authorize_access_token()
+        resp = google.get('https://openidconnect.googleapis.com/v1/userinfo')
+        user = resp.json()
+        if not user or not user.get('email'):
+            return render_template('403.html'), 403
+            
+        user_email = user.get('email').lower()
+        if ALLOWED_EMAILS and user_email not in ALLOWED_EMAILS:
+            print(f"Access Denied: {user_email} is not in ALLOWED_EMAILS")
+            return render_template('403.html'), 403
+            
+        session['user'] = {'email': user['email'], 'name': user.get('name', 'Authorized User')}
+        return redirect('/analytics')
+    except Exception as e:
+        # If the OAuth flow fails (invalid state, token error, access denied)
+        print("OAuth Exception:", e)
         return render_template('403.html'), 403
-    session['user'] = {'email': user['email'], 'name': user.get('name','Admin')}
-    return redirect('/analytics')
 
 @app.route('/logout')
 def logout():
@@ -141,13 +161,15 @@ def beacon():
     now = datetime.now(timezone.utc)
     iso = now.isoformat()
 
-    with get_db() as c:
-        c.execute('INSERT OR IGNORE INTO sessions (id,country,region,device,duration_sec,date,hour,timestamp) VALUES (?,?,?,?,0,?,?,?)',
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute('INSERT INTO sessions (id,country,region,device,duration_sec,date,hour,timestamp) VALUES (%s,%s,%s,%s,0,%s,%s,%s) ON CONFLICT (id) DO NOTHING',
             (sid, country, region, device, now.strftime('%Y-%m-%d'), now.hour, iso))
         if dur:
-            try: c.execute('UPDATE sessions SET duration_sec=MAX(COALESCE(duration_sec,0),?) WHERE id=?', (int(float(dur)), sid))
+            try: cur.execute('UPDATE sessions SET duration_sec=GREATEST(COALESCE(duration_sec,0),%s) WHERE id=%s', (int(float(dur)), sid))
             except: pass
-        c.commit()
+        conn.commit()
+    conn.close()
 
     resp = Response(PIXEL_GIF, mimetype='image/gif')
     resp.headers['X-Session-ID'] = sid
@@ -158,19 +180,57 @@ def beacon():
 def inquiry():
     d = get_payload()
     country, _ = get_geo()
-    with get_db() as c:
-        c.execute('INSERT INTO inquiries (name,email,message,company,phone,inquiry_type,country,device,timestamp) VALUES (?,?,?,?,?,?,?,?,?)',
+    conn = get_db()
+    with conn.cursor() as cur:
+        cur.execute('INSERT INTO inquiries (name,email,message,company,phone,inquiry_type,country,device,timestamp) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
             (d.get('name'), d.get('email'), d.get('message'), d.get('company'), d.get('phone'), d.get('inquiry_type'), country, get_device(), datetime.now(timezone.utc).isoformat()))
-        c.commit()
+        conn.commit()
+    conn.close()
+
+    # Trigger EmailJS via Backend HTTP Request
+    try:
+        service_id = os.getenv("EMAILJS_SERVICE_ID") or os.getenv("VITE_EMAILJS_SERVICE_ID")
+        template_id = os.getenv("EMAILJS_TEMPLATE_ID") or os.getenv("VITE_EMAILJS_TEMPLATE_ID")
+        public_key = os.getenv("EMAILJS_PUBLIC_KEY") or os.getenv("VITE_EMAILJS_PUBLIC_KEY")
+        private_key = os.getenv("EMAILJS_PRIVATE_KEY")
+        
+        if service_id and template_id and public_key:
+            email_payload = {
+                "service_id": service_id,
+                "template_id": template_id,
+                "user_id": public_key,
+                "accessToken": private_key,
+                "template_params": {
+                    "name": d.get('name', 'Unknown'),
+                    "email": d.get('email', 'No Email'),
+                    "inquiry_type": d.get('inquiry_type', 'General'),
+                    "message": d.get('message', ''),
+                    "company": d.get('company', 'None'),
+                    "phone": d.get('phone', 'None'),
+                    "country": country
+                }
+            }
+            r = requests.post("https://api.emailjs.com/api/v1.0/email/send", json=email_payload, timeout=5)
+            if not r.ok:
+                print(f"EmailJS Error {r.status_code}: {r.text}")
+            else:
+                print("EmailJS Success: Email queued.")
+    except Exception as e:
+        print("EmailJS Exception:", e)
+
     return jsonify({"ok": True})
 
 # --- PROTECTED ENDPOINTS ---
 @app.route('/api/analytics-data')
 @auth_required
 def api_data():
-    with get_db() as c:
-        s = [dict(r) for r in c.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 2000').fetchall()]
-        i = [dict(r) for r in c.execute('SELECT * FROM inquiries ORDER BY timestamp DESC').fetchall()]
+    conn = get_db()
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 2000')
+        s = [dict(r) for r in cur.fetchall()]
+        cur.execute('SELECT * FROM inquiries ORDER BY timestamp DESC')
+        i = [dict(r) for r in cur.fetchall()]
+    conn.close()
     return no_store(jsonify({"sessions": s, "inquiries": i}))
 
 @app.route('/analytics')
