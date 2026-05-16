@@ -25,10 +25,11 @@ def init_db():
         conn.execute('''
             CREATE TABLE IF NOT EXISTS sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sid TEXT UNIQUE,
                 country TEXT,
                 region TEXT,
                 device TEXT,
-                duration_sec INTEGER,
+                duration_sec INTEGER DEFAULT 0,
                 date TEXT,
                 hour INTEGER,
                 timestamp DATETIME
@@ -49,83 +50,42 @@ def init_db():
 
 init_db()
 
-# Country Mapping (Simple fallback for ip-api)
-COUNTRY_MAP = {
-    "IN": "India", "US": "United States", "GB": "United Kingdom", "CA": "Canada",
-    "AU": "Australia", "DE": "Germany", "FR": "France", "AE": "United Arab Emirates",
-    "SG": "Singapore", "JP": "Japan", "NL": "Netherlands", "SE": "Sweden",
-    "NO": "Norway", "DK": "Denmark", "CH": "Switzerland", "AT": "Austria",
-    "IE": "Ireland", "ES": "Spain", "IT": "Italy", "BR": "Brazil",
-    "ZA": "South Africa", "RU": "Russia", "CN": "China", "HK": "Hong Kong"
+# Improved Coordinate Mapping
+COUNTRY_COORDS = {
+    'India': [20.59, 78.96], 'United States': [37.09, -95.71], 'United Kingdom': [55.37, -3.43],
+    'Germany': [51.16, 10.45], 'France': [46.22, 2.21], 'Canada': [56.13, -106.34],
+    'Australia': [-25.27, 133.77], 'Singapore': [1.35, 103.81], 'Japan': [36.20, 138.25],
+    'Netherlands': [52.13, 5.29], 'United Arab Emirates': [23.42, 53.84], 'Brazil': [-14.23, -51.92]
 }
 
-# Geolocation Cache
-GEO_CACHE = {}
+# ... (rest of geo/device functions)
 
-def get_geo_info():
-    # Priority 1: Cloudflare Headers
-    country_code = request.headers.get('CF-IPCountry')
-    region = request.headers.get('CF-IPRegion', 'Unknown')
-    
-    if country_code and country_code != 'XX':
-        country = COUNTRY_MAP.get(country_code, country_code)
-        return country, region
-
-    # Priority 2: Fallback to ip-api.com
-    ip = request.headers.get('CF-Connecting-IP') or \
-         request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or \
-         request.remote_addr
-
-    if not ip or ip in ['127.0.0.1', '::1']:
-        return "Local", "Dev"
-
-    if ip in GEO_CACHE:
-        return GEO_CACHE[ip]
-
-    try:
-        r = requests.get(f"http://ip-api.com/json/{ip}?fields=status,country,countryCode,regionName", timeout=2)
-        if r.status_code == 200:
-            data = r.json()
-            if data.get('status') == 'success':
-                country = data.get('country')
-                region = data.get('regionName')
-                GEO_CACHE[ip] = (country, region)
-                return country, region
-    except Exception:
-        pass
-
-    return "Unknown", "Unknown"
-
-def get_device():
-    ua = request.headers.get('User-Agent', '').lower()
-    if 'ipad' in ua or 'tablet' in ua:
-        return 'Tablet'
-    if 'mobile' in ua or 'android' in ua or 'iphone' in ua:
-        return 'Mobile'
-    return 'Desktop'
-
-@app.route('/')
-def home():
-    return jsonify({"status": "online", "service": "occulo-tracker", "version": "1.0.1"})
-
-@app.route('/logo.gif')
+@app.route('/logo.gif', methods=['GET', 'POST'])
 def beacon():
+    sid = request.args.get('sid')
     duration = request.args.get('duration')
-    if duration:
+    
+    if sid:
         try:
-            dur_sec = int(float(duration))
             country, region = get_geo_info()
             device = get_device()
             now = datetime.now(timezone.utc)
+            dur_sec = int(float(duration)) if duration else 0
             
             with get_db() as conn:
-                conn.execute('''
-                    INSERT INTO sessions (country, region, device, duration_sec, date, hour, timestamp)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                ''', (country, region, device, dur_sec, now.strftime('%Y-%m-%d'), now.hour, now.isoformat()))
+                # Check if session exists
+                existing = conn.execute('SELECT id FROM sessions WHERE sid = ?', (sid,)).fetchone()
+                if existing:
+                    if dur_sec > 0:
+                        conn.execute('UPDATE sessions SET duration_sec = ? WHERE sid = ?', (dur_sec, sid))
+                else:
+                    conn.execute('''
+                        INSERT INTO sessions (sid, country, region, device, duration_sec, date, hour, timestamp)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ''', (sid, country, region, device, dur_sec, now.strftime('%Y-%m-%d'), now.hour, now.isoformat()))
                 conn.commit()
         except Exception as e:
-            app.logger.error(f"Error saving session: {e}")
+            app.logger.error(f"Beacon Error: {e}")
 
     # 1x1 Transparent GIF
     gif = b'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
@@ -163,11 +123,14 @@ def dashboard():
             
             avg_min, avg_sec = divmod(int(avg_dur), 60)
 
-            # Section 2: By Country
-            countries = conn.execute('''
+            # Section 2: By Country (for Map and Table)
+            countries_data = conn.execute('''
                 SELECT country, COUNT(*) as count, AVG(duration_sec) as avg_dur
-                FROM sessions GROUP BY country ORDER BY count DESC LIMIT 10
+                FROM sessions GROUP BY country ORDER BY count DESC
             ''').fetchall()
+            
+            # Prepare data for JS Map
+            map_data = {r['country']: r['count'] for r in countries_data}
 
             # Section 3: By Region
             regions = conn.execute('''
@@ -176,92 +139,191 @@ def dashboard():
             ''').fetchall()
 
             # Section 4: By Device
-            devices = conn.execute('''
+            devices_data = conn.execute('''
                 SELECT device, COUNT(*) as count
                 FROM sessions GROUP BY device ORDER BY count DESC
             ''').fetchall()
 
             # Section 5: By Hour
             hours_raw = conn.execute('SELECT hour, COUNT(*) as count FROM sessions GROUP BY hour').fetchall()
-            hours = {h['hour']: h['count'] for h in hours_raw}
-            max_h = max(hours.values()) if hours else 1
+            hours_map = {h['hour']: h['count'] for h in hours_raw}
+            hour_labels = [f"{h:02d}:00" for h in range(24)]
+            hour_values = [hours_map.get(h, 0) for h in range(24)]
 
-            # Section 6: Recent Sessions
+            # Recent Items
             recent_sessions = conn.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 20').fetchall()
-
-            # Section 7: Recent Inquiries
             recent_inquiries = conn.execute('SELECT * FROM inquiries ORDER BY timestamp DESC LIMIT 10').fetchall()
 
         # Build HTML
-        html = f'''
+        return f'''
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
-            <title>Occulo Analytics</title>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Occulo Analytics | Instrument Panel</title>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <style>
-                body {{ background: #0a0a0a; color: #fff; font-family: monospace; padding: 40px; line-height: 1.5; }}
-                h1, h2 {{ border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 40px; letter-spacing: 2px; }}
-                .numbers {{ display: flex; gap: 40px; margin-bottom: 40px; }}
-                .stat {{ border: 1px solid #333; padding: 20px; flex: 1; }}
-                .stat-val {{ font-size: 24px; font-weight: bold; color: #2c6bde; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-                th, td {{ text-align: left; padding: 8px; border-bottom: 1px solid #222; }}
-                th {{ color: #666; font-size: 12px; text-transform: uppercase; }}
-                .bar-row {{ display: flex; align-items: center; gap: 10px; margin: 2px 0; }}
-                .bar {{ background: #2c6bde; height: 12px; }}
-                .msg {{ color: #888; font-style: italic; }}
+                :root {{ --primary: #2c6bde; --bg: #0a0a0a; --card: #141414; --border: #222; --text: #eee; --text-dim: #666; }}
+                * {{ box-sizing: border-box; }}
+                body {{ background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, monospace; margin: 0; padding: 20px; }}
+                .container {{ max-width: 1400px; margin: 0 auto; }}
+                header {{ display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 30px; }}
+                .logo-text {{ font-weight: 800; letter-spacing: 4px; color: var(--primary); font-size: 1.2rem; }}
+                
+                .grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }}
+                .stat-card {{ background: var(--card); border: 1px solid var(--border); padding: 25px; border-radius: 12px; }}
+                .stat-label {{ color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }}
+                .stat-value {{ font-size: 2rem; font-weight: 700; color: var(--text); }}
+                
+                .main-grid {{ display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }}
+                .panel {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 25px; }}
+                .panel-header {{ font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }}
+                
+                #map {{ height: 400px; border-radius: 8px; background: #111; }}
+                
+                table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; }}
+                th {{ text-align: left; color: var(--text-dim); padding: 12px 8px; border-bottom: 1px solid var(--border); }}
+                td {{ padding: 12px 8px; border-bottom: 1px solid #1a1a1a; }}
+                tr:hover {{ background: #1a1a1a; }}
+                
+                .badge {{ background: var(--primary); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }}
+                .msg {{ color: var(--text-dim); font-style: italic; font-size: 0.8rem; }}
             </style>
         </head>
         <body>
-            <h1>OCCULO INSTRUMENT PANEL</h1>
-            
-            <div class="numbers">
-                <div class="stat"><div class="stat-val">{total_sessions}</div><div class="stat-label">Total Sessions</div></div>
-                <div class="stat"><div class="stat-val">{avg_min}m {avg_sec}s</div><div class="stat-label">Avg. Time on Site</div></div>
-                <div class="stat"><div class="stat-val">{total_inquiries}</div><div class="stat-label">Total Inquiries</div></div>
-                <div class="stat"><div class="stat-val">{inquiry_rate:.1f}%</div><div class="stat-label">Inquiry Rate</div></div>
+            <div class="container">
+                <header>
+                    <div class="logo-text">OCCULO / INSTRUMENT</div>
+                    <div style="font-size: 0.75rem; color: var(--text-dim);">LIVE ANALYTICS FEED • UTC {datetime.now(timezone.utc).strftime('%H:%M')}</div>
+                </header>
+
+                <div class="grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Traffic</div>
+                        <div class="stat-value">{total_sessions}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Avg. Persistence</div>
+                        <div class="stat-value">{avg_min}m {avg_sec}s</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Gross Inquiries</div>
+                        <div class="stat-value">{total_inquiries}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Capture Rate</div>
+                        <div class="stat-value">{inquiry_rate:.1f}%</div>
+                    </div>
+                </div>
+
+                <div class="main-grid">
+                    <div class="panel">
+                        <div class="panel-header">Spatial Distribution</div>
+                        <div id="map"></div>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">Temporal Activity</div>
+                        <canvas id="hourChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="main-grid">
+                    <div class="panel">
+                        <div class="panel-header">Geographic Breakdown</div>
+                        <table>
+                            <thead><tr><th>Country</th><th>Sessions</th><th>Avg Dur</th><th>Share</th></tr></thead>
+                            <tbody>
+                                {''.join(f"<tr><td>{r['country']}</td><td>{r['count']}</td><td>{int(r['avg_dur'])}s</td><td><span class='badge'>{(r['count']/total_sessions*100 if total_sessions > 0 else 0):.1f}%</span></td></tr>" for r in countries_data[:8])}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="panel">
+                        <div class="panel-header">Device Composition</div>
+                        <canvas id="deviceChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="panel" style="margin-bottom: 30px;">
+                    <div class="panel-header">Lead Pipeline (Recent Inquiries)</div>
+                    <table>
+                        <thead><tr><th>Date</th><th>Name</th><th>Email</th><th>Origin</th><th>Device</th><th>Message Preview</th></tr></thead>
+                        <tbody>
+                            {''.join(f"<tr><td>{r['timestamp'][:10]}</td><td>{r['name']}</td><td>{r['email']}</td><td>{r['country']}</td><td>{r['device']}</td><td class='msg'>{r['message'][:70]}...</td></tr>" for r in recent_inquiries)}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
-            <h2>BY COUNTRY</h2>
-            <table>
-                <tr><th>Country</th><th>Sessions</th><th>Avg Dur</th><th>Share</th></tr>
-                {''.join(f"<tr><td>{r['country']}</td><td>{r['count']}</td><td>{int(r['avg_dur'])}s</td><td>{(r['count']/total_sessions*100):.1f}%</td></tr>" for r in countries)}
-            </table>
+            <script>
+                // Hour Chart
+                new Chart(document.getElementById('hourChart'), {{
+                    type: 'bar',
+                    data: {{
+                        labels: {json.dumps(hour_labels)},
+                        datasets: [{{
+                            label: 'Sessions',
+                            data: {json.dumps(hour_values)},
+                            backgroundColor: '#2c6bde',
+                            borderRadius: 4
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        plugins: {{ legend: {{ display: false }} }},
+                        scales: {{ 
+                            y: {{ beginAtZero: true, grid: {{ color: '#222' }}, ticks: {{ color: '#666' }} }},
+                            x: {{ grid: {{ display: false }}, ticks: {{ color: '#666' }} }}
+                        }}
+                    }}
+                }});
 
-            <h2>BY REGION</h2>
-            <table>
-                <tr><th>Region</th><th>Country</th><th>Sessions</th></tr>
-                {''.join(f"<tr><td>{r['region']}</td><td>{r['country']}</td><td>{r['count']}</td></tr>" for r in regions)}
-            </table>
+                // Device Chart
+                new Chart(document.getElementById('deviceChart'), {{
+                    type: 'doughnut',
+                    data: {{
+                        labels: {json.dumps([r['device'] for r in devices_data])},
+                        datasets: [{{
+                            data: {json.dumps([r['count'] for r in devices_data])},
+                            backgroundColor: ['#2c6bde', '#1a4ba3', '#0d2d66'],
+                            borderWidth: 0
+                        }}]
+                    }},
+                    options: {{
+                        responsive: true,
+                        cutout: '70%',
+                        plugins: {{ 
+                            legend: {{ position: 'bottom', labels: {{ color: '#eee', boxWidth: 12, padding: 20 }} }} 
+                        }}
+                    }}
+                }});
 
-            <h2>BY DEVICE</h2>
-            <table>
-                <tr><th>Device</th><th>Count</th><th>Share</th></tr>
-                {''.join(f"<tr><td>{r['device']}</td><td>{r['count']}</td><td>{(r['count']/total_sessions*100):.1f}%</td></tr>" for r in devices)}
-            </table>
+                // World Map Initialization
+                const map = L.map('map', {{ zoomControl: false, attributionControl: false }}).setView([20, 0], 2);
+                L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png').addTo(map);
 
-            <h2>BY HOUR (UTC)</h2>
-            <div style="margin-top:20px;">
-                {''.join(f'<div class="bar-row"><span>{h:02d}</span><div class="bar" style="width:{(hours.get(h,0)/max_h*300)}px"></div><span>{hours.get(h,0)}</span></div>' for h in range(24))}
-            </div>
+                const countryData = {json.dumps(map_data)};
+                const coords = {{
+                    'India': [20.59, 78.96], 'United States': [37.09, -95.71], 'United Kingdom': [55.37, -3.43],
+                    'Germany': [51.16, 10.45], 'France': [46.22, 2.21], 'Canada': [56.13, -106.34]
+                }};
 
-            <h2>RECENT SESSIONS</h2>
-            <table>
-                <tr><th>Date</th><th>Hour</th><th>Country</th><th>Region</th><th>Device</th><th>Duration</th></tr>
-                {''.join(f"<tr><td>{r['date']}</td><td>{r['hour']:02d}:00</td><td>{r['country']}</td><td>{r['region']}</td><td>{r['device']}</td><td>{r['duration_sec']}s</td></tr>" for r in recent_sessions)}
-            </table>
-
-            <h2>RECENT INQUIRIES</h2>
-            <table>
-                <tr><th>Date</th><th>Name</th><th>Email</th><th>Country</th><th>Device</th><th>Message</th></tr>
-                {''.join(f"<tr><td>{r['timestamp'][:10]}</td><td>{r['name']}</td><td>{r['email']}</td><td>{r['country']}</td><td>{r['device']}</td><td class='msg'>{r['message'][:80]}{'...' if len(r['message'])>80 else ''}</td></tr>" for r in recent_inquiries)}
-            </table>
+                Object.keys(countryData).forEach(country => {{
+                    if (coords[country]) {{
+                        L.circle(coords[country], {{
+                            color: '#2c6bde', fillColor: '#2c6bde', fillOpacity: 0.5,
+                            radius: Math.sqrt(countryData[country]) * 200000
+                        }}).addTo(map).bindPopup(country + ': ' + countryData[country] + ' sessions');
+                    }}
+                }});
+            </script>
         </body>
         </html>
         '''
-        return html
     except Exception as e:
-        return f"Dashboard Error: {e}"
+        return f"Dashboard Error: {str(e)}", 500
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))

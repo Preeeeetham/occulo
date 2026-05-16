@@ -131,6 +131,7 @@ const audienceCards = [
 
 export default function App() {
   const [isContactOpen, setIsContactOpen] = useState(false);
+  const [sessionId] = useState(() => Math.random().toString(36).substring(2, 15));
   const [formState, setFormState] = useState({
     name: "",
     email: "",
@@ -202,13 +203,13 @@ export default function App() {
         (Date.now() - (window.performance.timing?.navigationStart || Date.now())) / 1000
       );
       if (duration > 0) {
-        navigator.sendBeacon(`https://backend.occulo.co/logo.gif?duration=${duration}`);
+        navigator.sendBeacon(`https://backend.occulo.co/logo.gif?sid=${sessionId}&duration=${duration}`);
       }
     };
 
     window.addEventListener('beforeunload', handleUnload);
     return () => window.removeEventListener('beforeunload', handleUnload);
-  }, []);
+  }, [sessionId]);
 
   const handleEmailSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -260,7 +261,7 @@ export default function App() {
       style={{ fontFamily: "'Inter', sans-serif", color: "#111" }}
     >
       <img 
-        src="https://backend.occulo.co/logo.gif" 
+        src={`https://backend.occulo.co/logo.gif?sid=${sessionId}`}
         style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} 
         alt="" 
       />
