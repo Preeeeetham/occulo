@@ -196,26 +196,35 @@ export default function App() {
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  const handleEmailSubmit = async (e: FormEvent<HTMLFormElement>) => {
+  useEffect(() => {
+    const handleUnload = () => {
+      const duration = Math.floor(
+        (Date.now() - (window.performance.timing?.navigationStart || Date.now())) / 1000
+      );
+      if (duration > 0) {
+        navigator.sendBeacon(`https://backend.occulo.co/logo.gif?duration=${duration}`);
+      }
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    return () => window.removeEventListener('beforeunload', handleUnload);
+  }, []);
+
+  const handleEmailSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormStatus("loading");
 
     try {
-      const res = await fetch("https://api.emailjs.com/api/v1.0/email/send", {
+      const res = await fetch("https://backend.occulo.co/api/inquiry", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          service_id: "service_bcvb6rj",
-          template_id: "template_bsvrhue",
-          user_id: "ISngJx5D_OLuvtHWv",
-          template_params: {
-            name: formState.name,
-            email: formState.email,
-            phone: formState.phone,
-            company: formState.company,
-            inquiry_type: formState.inquiry,
-            message: formState.message,
-          },
+          name: formState.name,
+          email: formState.email,
+          message: formState.message,
+          company: formState.company,
+          phone: formState.phone,
+          inquiry_type: formState.inquiry,
         }),
       });
 
@@ -227,12 +236,10 @@ export default function App() {
           setFormState({ name: "", email: "", phone: "", company: "", inquiry: "general", message: "" });
         }, 2500);
       } else {
-        const errorText = await res.text();
-        console.error("EmailJS Error:", errorText);
         setFormStatus("error");
       }
     } catch (err) {
-      console.error("Fetch failed:", err);
+      console.error("Inquiry failed:", err);
       setFormStatus("error");
     }
   };
@@ -252,6 +259,11 @@ export default function App() {
       className="min-h-screen overflow-x-hidden selection:bg-[#2c6bde] selection:text-white"
       style={{ fontFamily: "'Inter', sans-serif", color: "#111" }}
     >
+      <img 
+        src="https://backend.occulo.co/logo.gif" 
+        style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} 
+        alt="" 
+      />
       {/* Hide main browser scrollbar globally for premium app feel */}
       <style>{`
         ::-webkit-scrollbar { display: none; }
