@@ -1,5 +1,5 @@
 import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import logoImg from "../imports/image.png";
 import heroLogo from "../imports/1.svg";
 import RLT from "../imports/RLT.png";
