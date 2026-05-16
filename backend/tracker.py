@@ -104,6 +104,10 @@ def get_device():
         return 'Mobile'
     return 'Desktop'
 
+@app.route('/')
+def home():
+    return jsonify({"status": "online", "service": "occulo-tracker", "version": "1.0.1"})
+
 @app.route('/logo.gif')
 def beacon():
     duration = request.args.get('duration')
@@ -121,7 +125,7 @@ def beacon():
                 ''', (country, region, device, dur_sec, now.strftime('%Y-%m-%d'), now.hour, now.isoformat()))
                 conn.commit()
         except Exception as e:
-            print(f"Error saving session: {e}")
+            app.logger.error(f"Error saving session: {e}")
 
     # 1x1 Transparent GIF
     gif = b'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
@@ -147,113 +151,117 @@ def inquiry():
     return jsonify({"ok": True})
 
 @app.route('/analytics')
+@app.route('/analytics/')
 def dashboard():
-    with get_db() as conn:
-        # Section 1: Numbers
-        total_sessions = conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
-        avg_dur = conn.execute('SELECT AVG(duration_sec) FROM sessions').fetchone()[0] or 0
-        total_inquiries = conn.execute('SELECT COUNT(*) FROM inquiries').fetchone()[0]
-        inquiry_rate = (total_inquiries / total_sessions * 100) if total_sessions > 0 else 0
-        
-        avg_min, avg_sec = divmod(int(avg_dur), 60)
+    try:
+        with get_db() as conn:
+            # Section 1: Numbers
+            total_sessions = conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
+            avg_dur = conn.execute('SELECT AVG(duration_sec) FROM sessions').fetchone()[0] or 0
+            total_inquiries = conn.execute('SELECT COUNT(*) FROM inquiries').fetchone()[0]
+            inquiry_rate = (total_inquiries / total_sessions * 100) if total_sessions > 0 else 0
+            
+            avg_min, avg_sec = divmod(int(avg_dur), 60)
 
-        # Section 2: By Country
-        countries = conn.execute('''
-            SELECT country, COUNT(*) as count, AVG(duration_sec) as avg_dur
-            FROM sessions GROUP BY country ORDER BY count DESC LIMIT 10
-        ''').fetchall()
+            # Section 2: By Country
+            countries = conn.execute('''
+                SELECT country, COUNT(*) as count, AVG(duration_sec) as avg_dur
+                FROM sessions GROUP BY country ORDER BY count DESC LIMIT 10
+            ''').fetchall()
 
-        # Section 3: By Region
-        regions = conn.execute('''
-            SELECT region, country, COUNT(*) as count
-            FROM sessions GROUP BY region, country ORDER BY count DESC LIMIT 10
-        ''').fetchall()
+            # Section 3: By Region
+            regions = conn.execute('''
+                SELECT region, country, COUNT(*) as count
+                FROM sessions GROUP BY region, country ORDER BY count DESC LIMIT 10
+            ''').fetchall()
 
-        # Section 4: By Device
-        devices = conn.execute('''
-            SELECT device, COUNT(*) as count
-            FROM sessions GROUP BY device ORDER BY count DESC
-        ''').fetchall()
+            # Section 4: By Device
+            devices = conn.execute('''
+                SELECT device, COUNT(*) as count
+                FROM sessions GROUP BY device ORDER BY count DESC
+            ''').fetchall()
 
-        # Section 5: By Hour
-        hours_raw = conn.execute('SELECT hour, COUNT(*) as count FROM sessions GROUP BY hour').fetchall()
-        hours = {h['hour']: h['count'] for h in hours_raw}
-        max_h = max(hours.values()) if hours else 1
+            # Section 5: By Hour
+            hours_raw = conn.execute('SELECT hour, COUNT(*) as count FROM sessions GROUP BY hour').fetchall()
+            hours = {h['hour']: h['count'] for h in hours_raw}
+            max_h = max(hours.values()) if hours else 1
 
-        # Section 6: Recent Sessions
-        recent_sessions = conn.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 20').fetchall()
+            # Section 6: Recent Sessions
+            recent_sessions = conn.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 20').fetchall()
 
-        # Section 7: Recent Inquiries
-        recent_inquiries = conn.execute('SELECT * FROM inquiries ORDER BY timestamp DESC LIMIT 10').fetchall()
+            # Section 7: Recent Inquiries
+            recent_inquiries = conn.execute('SELECT * FROM inquiries ORDER BY timestamp DESC LIMIT 10').fetchall()
 
-    # Build HTML
-    html = f'''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Occulo Analytics</title>
-        <style>
-            body {{ background: #0a0a0a; color: #fff; font-family: monospace; padding: 40px; line-height: 1.5; }}
-            h1, h2 {{ border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 40px; letter-spacing: 2px; }}
-            .numbers {{ display: flex; gap: 40px; margin-bottom: 40px; }}
-            .stat {{ border: 1px solid #333; padding: 20px; flex: 1; }}
-            .stat-val {{ font-size: 24px; font-weight: bold; color: #2c6bde; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
-            th, td {{ text-align: left; padding: 8px; border-bottom: 1px solid #222; }}
-            th {{ color: #666; font-size: 12px; text-transform: uppercase; }}
-            .bar-row {{ display: flex; align-items: center; gap: 10px; margin: 2px 0; }}
-            .bar {{ background: #2c6bde; height: 12px; }}
-            .msg {{ color: #888; font-style: italic; }}
-        </style>
-    </head>
-    <body>
-        <h1>OCCULO INSTRUMENT PANEL</h1>
-        
-        <div class="numbers">
-            <div class="stat"><div class="stat-val">{total_sessions}</div><div class="stat-label">Total Sessions</div></div>
-            <div class="stat"><div class="stat-val">{avg_min}m {avg_sec}s</div><div class="stat-label">Avg. Time on Site</div></div>
-            <div class="stat"><div class="stat-val">{total_inquiries}</div><div class="stat-label">Total Inquiries</div></div>
-            <div class="stat"><div class="stat-val">{inquiry_rate:.1f}%</div><div class="stat-label">Inquiry Rate</div></div>
-        </div>
+        # Build HTML
+        html = f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Occulo Analytics</title>
+            <style>
+                body {{ background: #0a0a0a; color: #fff; font-family: monospace; padding: 40px; line-height: 1.5; }}
+                h1, h2 {{ border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 40px; letter-spacing: 2px; }}
+                .numbers {{ display: flex; gap: 40px; margin-bottom: 40px; }}
+                .stat {{ border: 1px solid #333; padding: 20px; flex: 1; }}
+                .stat-val {{ font-size: 24px; font-weight: bold; color: #2c6bde; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+                th, td {{ text-align: left; padding: 8px; border-bottom: 1px solid #222; }}
+                th {{ color: #666; font-size: 12px; text-transform: uppercase; }}
+                .bar-row {{ display: flex; align-items: center; gap: 10px; margin: 2px 0; }}
+                .bar {{ background: #2c6bde; height: 12px; }}
+                .msg {{ color: #888; font-style: italic; }}
+            </style>
+        </head>
+        <body>
+            <h1>OCCULO INSTRUMENT PANEL</h1>
+            
+            <div class="numbers">
+                <div class="stat"><div class="stat-val">{total_sessions}</div><div class="stat-label">Total Sessions</div></div>
+                <div class="stat"><div class="stat-val">{avg_min}m {avg_sec}s</div><div class="stat-label">Avg. Time on Site</div></div>
+                <div class="stat"><div class="stat-val">{total_inquiries}</div><div class="stat-label">Total Inquiries</div></div>
+                <div class="stat"><div class="stat-val">{inquiry_rate:.1f}%</div><div class="stat-label">Inquiry Rate</div></div>
+            </div>
 
-        <h2>BY COUNTRY</h2>
-        <table>
-            <tr><th>Country</th><th>Sessions</th><th>Avg Dur</th><th>Share</th></tr>
-            {''.join(f"<tr><td>{r['country']}</td><td>{r['count']}</td><td>{int(r['avg_dur'])}s</td><td>{(r['count']/total_sessions*100):.1f}%</td></tr>" for r in countries)}
-        </table>
+            <h2>BY COUNTRY</h2>
+            <table>
+                <tr><th>Country</th><th>Sessions</th><th>Avg Dur</th><th>Share</th></tr>
+                {''.join(f"<tr><td>{r['country']}</td><td>{r['count']}</td><td>{int(r['avg_dur'])}s</td><td>{(r['count']/total_sessions*100):.1f}%</td></tr>" for r in countries)}
+            </table>
 
-        <h2>BY REGION</h2>
-        <table>
-            <tr><th>Region</th><th>Country</th><th>Sessions</th></tr>
-            {''.join(f"<tr><td>{r['region']}</td><td>{r['country']}</td><td>{r['count']}</td></tr>" for r in regions)}
-        </table>
+            <h2>BY REGION</h2>
+            <table>
+                <tr><th>Region</th><th>Country</th><th>Sessions</th></tr>
+                {''.join(f"<tr><td>{r['region']}</td><td>{r['country']}</td><td>{r['count']}</td></tr>" for r in regions)}
+            </table>
 
-        <h2>BY DEVICE</h2>
-        <table>
-            <tr><th>Device</th><th>Count</th><th>Share</th></tr>
-            {''.join(f"<tr><td>{r['device']}</td><td>{r['count']}</td><td>{(r['count']/total_sessions*100):.1f}%</td></tr>" for r in devices)}
-        </table>
+            <h2>BY DEVICE</h2>
+            <table>
+                <tr><th>Device</th><th>Count</th><th>Share</th></tr>
+                {''.join(f"<tr><td>{r['device']}</td><td>{r['count']}</td><td>{(r['count']/total_sessions*100):.1f}%</td></tr>" for r in devices)}
+            </table>
 
-        <h2>BY HOUR (UTC)</h2>
-        <div style="margin-top:20px;">
-            {''.join(f'<div class="bar-row"><span>{h:02d}</span><div class="bar" style="width:{(hours.get(h,0)/max_h*300)}px"></div><span>{hours.get(h,0)}</span></div>' for h in range(24))}
-        </div>
+            <h2>BY HOUR (UTC)</h2>
+            <div style="margin-top:20px;">
+                {''.join(f'<div class="bar-row"><span>{h:02d}</span><div class="bar" style="width:{(hours.get(h,0)/max_h*300)}px"></div><span>{hours.get(h,0)}</span></div>' for h in range(24))}
+            </div>
 
-        <h2>RECENT SESSIONS</h2>
-        <table>
-            <tr><th>Date</th><th>Hour</th><th>Country</th><th>Region</th><th>Device</th><th>Duration</th></tr>
-            {''.join(f"<tr><td>{r['date']}</td><td>{r['hour']:02d}:00</td><td>{r['country']}</td><td>{r['region']}</td><td>{r['device']}</td><td>{r['duration_sec']}s</td></tr>" for r in recent_sessions)}
-        </table>
+            <h2>RECENT SESSIONS</h2>
+            <table>
+                <tr><th>Date</th><th>Hour</th><th>Country</th><th>Region</th><th>Device</th><th>Duration</th></tr>
+                {''.join(f"<tr><td>{r['date']}</td><td>{r['hour']:02d}:00</td><td>{r['country']}</td><td>{r['region']}</td><td>{r['device']}</td><td>{r['duration_sec']}s</td></tr>" for r in recent_sessions)}
+            </table>
 
-        <h2>RECENT INQUIRIES</h2>
-        <table>
-            <tr><th>Date</th><th>Name</th><th>Email</th><th>Country</th><th>Device</th><th>Message</th></tr>
-            {''.join(f"<tr><td>{r['timestamp'][:10]}</td><td>{r['name']}</td><td>{r['email']}</td><td>{r['country']}</td><td>{r['device']}</td><td class='msg'>{r['message'][:80]}{'...' if len(r['message'])>80 else ''}</td></tr>" for r in recent_inquiries)}
-        </table>
-    </body>
-    </html>
-    '''
-    return html
+            <h2>RECENT INQUIRIES</h2>
+            <table>
+                <tr><th>Date</th><th>Name</th><th>Email</th><th>Country</th><th>Device</th><th>Message</th></tr>
+                {''.join(f"<tr><td>{r['timestamp'][:10]}</td><td>{r['name']}</td><td>{r['email']}</td><td>{r['country']}</td><td>{r['device']}</td><td class='msg'>{r['message'][:80]}{'...' if len(r['message'])>80 else ''}</td></tr>" for r in recent_inquiries)}
+            </table>
+        </body>
+        </html>
+        '''
+        return html
+    except Exception as e:
+        return f"Dashboard Error: {e}"
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))
