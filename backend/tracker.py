@@ -40,6 +40,8 @@ PIXEL_GIF = b'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
 START_TIME = time.time()
 
 def get_db():
+    if not DATABASE_URL:
+        raise EnvironmentError("DATABASE_URL is missing! Please add it to your environment variables.")
     conn = psycopg2.connect(DATABASE_URL)
     return conn
 
