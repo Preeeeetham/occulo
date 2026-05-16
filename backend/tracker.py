@@ -1,12 +1,11 @@
 import os
 import json
-import time
 import sqlite3
 import requests
+import uuid
 from datetime import datetime, timezone
 from flask import Flask, request, Response, jsonify
 from flask_cors import CORS
-from urllib.parse import urlparse
 
 app = Flask(__name__)
 CORS(app)
@@ -24,8 +23,7 @@ def init_db():
     with get_db() as conn:
         conn.execute('''
             CREATE TABLE IF NOT EXISTS sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                sid TEXT UNIQUE,
+                id TEXT PRIMARY KEY,
                 country TEXT,
                 region TEXT,
                 device TEXT,
@@ -50,280 +48,259 @@ def init_db():
 
 init_db()
 
-# Improved Coordinate Mapping
-COUNTRY_COORDS = {
-    'India': [20.59, 78.96], 'United States': [37.09, -95.71], 'United Kingdom': [55.37, -3.43],
-    'Germany': [51.16, 10.45], 'France': [46.22, 2.21], 'Canada': [56.13, -106.34],
-    'Australia': [-25.27, 133.77], 'Singapore': [1.35, 103.81], 'Japan': [36.20, 138.25],
-    'Netherlands': [52.13, 5.29], 'United Arab Emirates': [23.42, 53.84], 'Brazil': [-14.23, -51.92]
-}
+def get_geo_info():
+    country_code = request.headers.get('CF-IPCountry')
+    region = request.headers.get('CF-IPRegion', 'Unknown')
+    if country_code and country_code != 'XX':
+        return country_code, region
+    ip = request.headers.get('CF-Connecting-IP') or request.headers.get('X-Forwarded-For', '').split(',')[0].strip() or request.remote_addr
+    try:
+        r = requests.get(f"http://ip-api.com/json/{ip}?fields=status,countryCode,regionName", timeout=2)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get('status') == 'success': return data.get('countryCode'), data.get('regionName')
+    except: pass
+    return "US", "Unknown"
 
-# ... (rest of geo/device functions)
+def get_device():
+    ua = request.headers.get('User-Agent', '').lower()
+    if 'ipad' in ua or 'tablet' in ua: return 'Tablet'
+    if 'mobile' in ua or 'android' in ua or 'iphone' in ua: return 'Mobile'
+    return 'Desktop'
+
+@app.route('/')
+def home():
+    return jsonify({"status": "online", "service": "occulo-tracker", "version": "2.2.0"})
 
 @app.route('/logo.gif', methods=['GET', 'POST'])
 def beacon():
     sid = request.args.get('sid')
     duration = request.args.get('duration')
-    
-    if sid:
+    if not sid and request.method == 'GET':
+        new_sid = str(uuid.uuid4())
+        country, region = get_geo_info()
+        device = get_device()
+        now = datetime.now(timezone.utc)
         try:
-            country, region = get_geo_info()
-            device = get_device()
-            now = datetime.now(timezone.utc)
-            dur_sec = int(float(duration)) if duration else 0
-            
             with get_db() as conn:
-                # Check if session exists
-                existing = conn.execute('SELECT id FROM sessions WHERE sid = ?', (sid,)).fetchone()
-                if existing:
-                    if dur_sec > 0:
-                        conn.execute('UPDATE sessions SET duration_sec = ? WHERE sid = ?', (dur_sec, sid))
-                else:
-                    conn.execute('''
-                        INSERT INTO sessions (sid, country, region, device, duration_sec, date, hour, timestamp)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (sid, country, region, device, dur_sec, now.strftime('%Y-%m-%d'), now.hour, now.isoformat()))
+                conn.execute('INSERT INTO sessions (id, country, region, device, date, hour, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                           (new_sid, country, region, device, now.strftime('%Y-%m-%d'), now.hour, now.isoformat()))
                 conn.commit()
-        except Exception as e:
-            app.logger.error(f"Beacon Error: {e}")
-
-    # 1x1 Transparent GIF
-    gif = b'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
-    return Response(gif, mimetype='image/gif')
+            gif = b'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+            resp = Response(gif, mimetype='image/gif')
+            resp.headers['X-Session-ID'] = new_sid
+            return resp
+        except: pass
+    if sid and duration:
+        try:
+            dur_sec = int(float(duration))
+            with get_db() as conn:
+                conn.execute('UPDATE sessions SET duration_sec = ? WHERE id = ?', (dur_sec, sid))
+                conn.commit()
+        except: pass
+    return Response(b'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', mimetype='image/gif')
 
 @app.route('/api/inquiry', methods=['POST'])
 def inquiry():
     data = request.get_json()
-    if not data:
-        return jsonify({"ok": False, "error": "No data"}), 400
-    
     country, _ = get_geo_info()
     device = get_device()
-    now = datetime.now(timezone.utc)
-    
+    now = datetime.now(timezone.utc).isoformat()
     with get_db() as conn:
-        conn.execute('''
-            INSERT INTO inquiries (name, email, message, country, device, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (data.get('name'), data.get('email'), data.get('message'), country, device, now.isoformat()))
+        conn.execute('INSERT INTO inquiries (name, email, message, country, device, timestamp) VALUES (?, ?, ?, ?, ?, ?)',
+                   (data.get('name'), data.get('email'), data.get('message'), country, device, now))
         conn.commit()
-        
     return jsonify({"ok": True})
 
 @app.route('/analytics')
 @app.route('/analytics/')
 def dashboard():
-    try:
-        with get_db() as conn:
-            # Section 1: Numbers
-            total_sessions = conn.execute('SELECT COUNT(*) FROM sessions').fetchone()[0]
-            avg_dur = conn.execute('SELECT AVG(duration_sec) FROM sessions').fetchone()[0] or 0
-            total_inquiries = conn.execute('SELECT COUNT(*) FROM inquiries').fetchone()[0]
-            inquiry_rate = (total_inquiries / total_sessions * 100) if total_sessions > 0 else 0
+    with get_db() as conn:
+        stats = conn.execute('SELECT COUNT(*) as total, AVG(duration_sec) as avg_dur FROM sessions').fetchone()
+        avg_dur = stats['avg_dur'] if stats['avg_dur'] is not None else 0
+        total_inquiries = conn.execute('SELECT COUNT(*) FROM inquiries').fetchone()[0]
+        geo_data = conn.execute('SELECT country, COUNT(*) as count FROM sessions GROUP BY country').fetchall()
+        hourly_data = conn.execute('SELECT hour, COUNT(*) as count FROM sessions GROUP BY hour ORDER BY hour').fetchall()
+        recent = conn.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 15').fetchall()
+
+    return f'''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Occulo | Analytics Instrument</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <style>
+            :root {{
+                --bg: #f4f4f4;
+                --primary: #2c6bde;
+                --text-black: #000000;
+                --text-white: #ffffff;
+                --border: rgba(0, 0, 0, 0.08);
+            }}
+            * {{ box-sizing: border-box; -webkit-font-smoothing: antialiased; }}
+            body {{ 
+                background: var(--bg); 
+                color: var(--text-black); 
+                font-family: 'Inter', sans-serif; 
+                margin: 0; padding: 0; 
+            }}
+            ::-webkit-scrollbar {{ display: none; }}
+            .container {{ max-width: 1400px; margin: 0 auto; padding: 40px 20px; }}
             
-            avg_min, avg_sec = divmod(int(avg_dur), 60)
+            header {{ 
+                display: flex; justify-content: space-between; align-items: center; 
+                padding-bottom: 30px; border-bottom: 1px solid var(--border); margin-bottom: 40px; 
+            }}
+            .logo {{ font-weight: 800; letter-spacing: -0.02em; color: var(--primary); font-size: 1.5rem; }}
+            .status {{ display: flex; align-items: center; gap: 8px; font-size: 0.75rem; font-weight: 700; color: #666; text-transform: uppercase; letter-spacing: 0.1em; }}
+            .dot {{ width: 8px; height: 8px; background: #10b981; border-radius: 50%; box-shadow: 0 0 8px #10b981; animation: pulse 2s infinite; }}
+            @keyframes pulse {{ 0% {{ opacity: 1; }} 50% {{ opacity: 0.5; }} 100% {{ opacity: 1; }} }}
 
-            # Section 2: By Country (for Map and Table)
-            countries_data = conn.execute('''
-                SELECT country, COUNT(*) as count, AVG(duration_sec) as avg_dur
-                FROM sessions GROUP BY country ORDER BY count DESC
-            ''').fetchall()
+            .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 40px; }}
+            .kpi-card {{ 
+                background: var(--primary); 
+                color: var(--text-white);
+                padding: 32px; 
+                border-radius: 24px;
+                box-shadow: 0 10px 30px rgba(44, 107, 222, 0.15);
+                transition: transform 0.3s ease;
+            }}
+            .kpi-card:hover {{ transform: translateY(-6px); }}
+            .kpi-label {{ opacity: 0.8; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px; }}
+            .kpi-value {{ font-size: 2.5rem; font-weight: 800; }}
+
+            .main-grid {{ display: grid; grid-template-columns: 1.8fr 1fr; gap: 24px; margin-bottom: 24px; }}
+            .panel {{ 
+                background: #ffffff; 
+                border: 1px solid var(--border); 
+                border-radius: 32px; 
+                padding: 40px; 
+                box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+            }}
+            .panel-title {{ font-size: 0.9rem; font-weight: 700; color: #999; text-transform: uppercase; margin-bottom: 30px; letter-spacing: 0.05em; }}
             
-            # Prepare data for JS Map
-            map_data = {r['country']: r['count'] for r in countries_data}
+            #map {{ height: 450px; border-radius: 24px; background: #eee; overflow: hidden; border: 1px solid #eee; }}
+            .chart-container {{ height: 350px; position: relative; }}
+            
+            table {{ width: 100%; border-collapse: collapse; font-size: 0.9rem; }}
+            th {{ text-align: left; color: #999; padding: 15px 10px; border-bottom: 1px solid var(--border); }}
+            td {{ padding: 20px 10px; border-bottom: 1px solid #f9f9f9; font-weight: 500; }}
+            .tag {{ background: rgba(44, 107, 222, 0.1); color: var(--primary); padding: 6px 12px; border-radius: 8px; font-weight: 700; font-size: 0.75rem; }}
+            tr:hover {{ background: #fcfcfc; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <div class="logo">OCCULO INSTRUMENT</div>
+                <div class="status"><div class="dot"></div> LIVE SYSTEM FEED</div>
+            </header>
 
-            # Section 3: By Region
-            regions = conn.execute('''
-                SELECT region, country, COUNT(*) as count
-                FROM sessions GROUP BY region, country ORDER BY count DESC LIMIT 10
-            ''').fetchall()
-
-            # Section 4: By Device
-            devices_data = conn.execute('''
-                SELECT device, COUNT(*) as count
-                FROM sessions GROUP BY device ORDER BY count DESC
-            ''').fetchall()
-
-            # Section 5: By Hour
-            hours_raw = conn.execute('SELECT hour, COUNT(*) as count FROM sessions GROUP BY hour').fetchall()
-            hours_map = {h['hour']: h['count'] for h in hours_raw}
-            hour_labels = [f"{h:02d}:00" for h in range(24)]
-            hour_values = [hours_map.get(h, 0) for h in range(24)]
-
-            # Recent Items
-            recent_sessions = conn.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 20').fetchall()
-            recent_inquiries = conn.execute('SELECT * FROM inquiries ORDER BY timestamp DESC LIMIT 10').fetchall()
-
-        # Build HTML
-        return f'''
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Occulo Analytics | Instrument Panel</title>
-            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-            <style>
-                :root {{ --primary: #2c6bde; --bg: #0a0a0a; --card: #141414; --border: #222; --text: #eee; --text-dim: #666; }}
-                * {{ box-sizing: border-box; }}
-                body {{ background: var(--bg); color: var(--text); font-family: 'Inter', -apple-system, monospace; margin: 0; padding: 20px; }}
-                .container {{ max-width: 1400px; margin: 0 auto; }}
-                header {{ display: flex; justify-content: space-between; align-items: center; padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 30px; }}
-                .logo-text {{ font-weight: 800; letter-spacing: 4px; color: var(--primary); font-size: 1.2rem; }}
-                
-                .grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }}
-                .stat-card {{ background: var(--card); border: 1px solid var(--border); padding: 25px; border-radius: 12px; }}
-                .stat-label {{ color: var(--text-dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }}
-                .stat-value {{ font-size: 2rem; font-weight: 700; color: var(--text); }}
-                
-                .main-grid {{ display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 30px; }}
-                .panel {{ background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 25px; }}
-                .panel-header {{ font-size: 0.85rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }}
-                
-                #map {{ height: 400px; border-radius: 8px; background: #111; }}
-                
-                table {{ width: 100%; border-collapse: collapse; font-size: 0.85rem; }}
-                th {{ text-align: left; color: var(--text-dim); padding: 12px 8px; border-bottom: 1px solid var(--border); }}
-                td {{ padding: 12px 8px; border-bottom: 1px solid #1a1a1a; }}
-                tr:hover {{ background: #1a1a1a; }}
-                
-                .badge {{ background: var(--primary); color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; }}
-                .msg {{ color: var(--text-dim); font-style: italic; font-size: 0.8rem; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <header>
-                    <div class="logo-text">OCCULO / INSTRUMENT</div>
-                    <div style="font-size: 0.75rem; color: var(--text-dim);">LIVE ANALYTICS FEED • UTC {datetime.now(timezone.utc).strftime('%H:%M')}</div>
-                </header>
-
-                <div class="grid">
-                    <div class="stat-card">
-                        <div class="stat-label">Total Traffic</div>
-                        <div class="stat-value">{total_sessions}</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Avg. Persistence</div>
-                        <div class="stat-value">{avg_min}m {avg_sec}s</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Gross Inquiries</div>
-                        <div class="stat-value">{total_inquiries}</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-label">Capture Rate</div>
-                        <div class="stat-value">{inquiry_rate:.1f}%</div>
-                    </div>
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-label">TOTAL SESSIONS</div>
+                    <div class="kpi-value">{stats['total']}</div>
                 </div>
-
-                <div class="main-grid">
-                    <div class="panel">
-                        <div class="panel-header">Spatial Distribution</div>
-                        <div id="map"></div>
-                    </div>
-                    <div class="panel">
-                        <div class="panel-header">Temporal Activity</div>
-                        <canvas id="hourChart"></canvas>
-                    </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">AVERAGE DURATION</div>
+                    <div class="kpi-value">{int(avg_dur)}s</div>
                 </div>
-
-                <div class="main-grid">
-                    <div class="panel">
-                        <div class="panel-header">Geographic Breakdown</div>
-                        <table>
-                            <thead><tr><th>Country</th><th>Sessions</th><th>Avg Dur</th><th>Share</th></tr></thead>
-                            <tbody>
-                                {''.join(f"<tr><td>{r['country']}</td><td>{r['count']}</td><td>{int(r['avg_dur'])}s</td><td><span class='badge'>{(r['count']/total_sessions*100 if total_sessions > 0 else 0):.1f}%</span></td></tr>" for r in countries_data[:8])}
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="panel">
-                        <div class="panel-header">Device Composition</div>
-                        <canvas id="deviceChart"></canvas>
-                    </div>
+                <div class="kpi-card">
+                    <div class="kpi-label">TOTAL INQUIRIES</div>
+                    <div class="kpi-value">{total_inquiries}</div>
                 </div>
-
-                <div class="panel" style="margin-bottom: 30px;">
-                    <div class="panel-header">Lead Pipeline (Recent Inquiries)</div>
-                    <table>
-                        <thead><tr><th>Date</th><th>Name</th><th>Email</th><th>Origin</th><th>Device</th><th>Message Preview</th></tr></thead>
-                        <tbody>
-                            {''.join(f"<tr><td>{r['timestamp'][:10]}</td><td>{r['name']}</td><td>{r['email']}</td><td>{r['country']}</td><td>{r['device']}</td><td class='msg'>{r['message'][:70]}...</td></tr>" for r in recent_inquiries)}
-                        </tbody>
-                    </table>
+                <div class="kpi-card">
+                    <div class="kpi-label">ENGAGEMENT RATE</div>
+                    <div class="kpi-value">{(total_inquiries/stats['total']*100 if stats['total']>0 else 0):.1f}%</div>
                 </div>
             </div>
 
-            <script>
-                // Hour Chart
-                new Chart(document.getElementById('hourChart'), {{
-                    type: 'bar',
-                    data: {{
-                        labels: {json.dumps(hour_labels)},
-                        datasets: [{{
-                            label: 'Sessions',
-                            data: {json.dumps(hour_values)},
-                            backgroundColor: '#2c6bde',
-                            borderRadius: 4
-                        }}]
-                    }},
-                    options: {{
-                        responsive: true,
-                        plugins: {{ legend: {{ display: false }} }},
-                        scales: {{ 
-                            y: {{ beginAtZero: true, grid: {{ color: '#222' }}, ticks: {{ color: '#666' }} }},
-                            x: {{ grid: {{ display: false }}, ticks: {{ color: '#666' }} }}
-                        }}
+            <div class="main-grid">
+                <div class="panel">
+                    <div class="panel-title">Active Spatial Nodes</div>
+                    <div id="map"></div>
+                </div>
+                <div class="panel">
+                    <div class="panel-title">System Load (24h)</div>
+                    <div class="chart-container">
+                        <canvas id="trafficChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top: 24px;">
+                <div class="panel-title">Raw Telemetry Stream</div>
+                <table>
+                    <thead>
+                        <tr><th>Timestamp</th><th>Node Origin</th><th>Sub-Region</th><th>Device Platform</th><th>Dur.</th></tr>
+                    </thead>
+                    <tbody>
+                        {''.join(f"<tr><td>{r['timestamp'][11:19]}</td><td><span class='tag'>{r['country']}</span></td><td>{r['region']}</td><td>{r['device']}</td><td>{r['duration_sec']}s</td></tr>" for r in recent)}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <script>
+            // Map Initialization
+            const map = L.map('map', {{ zoomControl: false }}).setView([20, 0], 2);
+            L.tileLayer('https://{{s}}.basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}{{r}}.png').addTo(map);
+
+            const countryCoords = {{
+                'US': [37, -95], 'GB': [55, -2], 'IN': [20, 78], 'DE': [51, 9], 'FR': [46, 2],
+                'CA': [56, -106], 'AU': [-25, 133], 'JP': [36, 138], 'BR': [-14, -51]
+            }};
+
+            const geoData = {json.dumps([dict(r) for r in geo_data])};
+            geoData.forEach(d => {{
+                const coords = countryCoords[d.country] || [Math.random()*60, Math.random()*60];
+                L.circle(coords, {{
+                    color: '#2c6bde',
+                    fillColor: '#2c6bde',
+                    fillOpacity: 0.6,
+                    radius: 400000 + (d.count * 15000),
+                    weight: 2
+                }}).addTo(map);
+            }});
+
+            // Line Chart Initialization
+            const ctx = document.getElementById('trafficChart').getContext('2d');
+            new Chart(ctx, {{
+                type: 'line',
+                data: {{
+                    labels: {json.dumps([r['hour'] for r in hourly_data])},
+                    datasets: [{{
+                        label: 'Visits',
+                        data: {json.dumps([r['count'] for r in hourly_data])},
+                        borderColor: '#2c6bde',
+                        backgroundColor: 'rgba(44, 107, 222, 0.05)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 4,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#2c6bde',
+                        pointBorderWidth: 2
+                    }}]
+                }},
+                options: {{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {{ legend: {{ display: false }} }},
+                    scales: {{
+                        x: {{ grid: {{ display: false }}, ticks: {{ color: '#999', font: {{ family: 'Inter', weight: 600 }} }} }},
+                        y: {{ grid: {{ color: '#eee' }}, ticks: {{ color: '#999', font: {{ family: 'Inter' }} }} }}
                     }}
-                }});
-
-                // Device Chart
-                new Chart(document.getElementById('deviceChart'), {{
-                    type: 'doughnut',
-                    data: {{
-                        labels: {json.dumps([r['device'] for r in devices_data])},
-                        datasets: [{{
-                            data: {json.dumps([r['count'] for r in devices_data])},
-                            backgroundColor: ['#2c6bde', '#1a4ba3', '#0d2d66'],
-                            borderWidth: 0
-                        }}]
-                    }},
-                    options: {{
-                        responsive: true,
-                        cutout: '70%',
-                        plugins: {{ 
-                            legend: {{ position: 'bottom', labels: {{ color: '#eee', boxWidth: 12, padding: 20 }} }} 
-                        }}
-                    }}
-                }});
-
-                // World Map Initialization
-                const map = L.map('map', {{ zoomControl: false, attributionControl: false }}).setView([20, 0], 2);
-                L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png').addTo(map);
-
-                const countryData = {json.dumps(map_data)};
-                const coords = {{
-                    'India': [20.59, 78.96], 'United States': [37.09, -95.71], 'United Kingdom': [55.37, -3.43],
-                    'Germany': [51.16, 10.45], 'France': [46.22, 2.21], 'Canada': [56.13, -106.34]
-                }};
-
-                Object.keys(countryData).forEach(country => {{
-                    if (coords[country]) {{
-                        L.circle(coords[country], {{
-                            color: '#2c6bde', fillColor: '#2c6bde', fillOpacity: 0.5,
-                            radius: Math.sqrt(countryData[country]) * 200000
-                        }}).addTo(map).bindPopup(country + ': ' + countryData[country] + ' sessions');
-                    }}
-                }});
-            </script>
-        </body>
-        </html>
-        '''
-    except Exception as e:
-        return f"Dashboard Error: {str(e)}", 500
+                }}
+            }});
+        </script>
+    </body>
+    </html>
+    '''
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))

@@ -198,11 +198,15 @@ export default function App() {
   };
 
   useEffect(() => {
+    const startTime = Date.now();
+
+    // Fire the initial "I am here" signal
+    const img = new Image();
+    img.src = `https://backend.occulo.co/logo.gif?sid=${sessionId}`;
+
     const handleUnload = () => {
-      const duration = Math.floor(
-        (Date.now() - (window.performance.timing?.navigationStart || Date.now())) / 1000
-      );
-      if (duration > 0) {
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+      if (duration >= 0) {
         navigator.sendBeacon(`https://backend.occulo.co/logo.gif?sid=${sessionId}&duration=${duration}`);
       }
     };
