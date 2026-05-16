@@ -33,4 +33,20 @@ export default defineConfig({
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+  server: {
+    proxy: {
+      '/_o/inquiry': {
+        target: 'https://backend.occulo.co',
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => '/api/inquiry',
+      },
+      '/_o/p.gif': {
+        target: 'https://backend.occulo.co',
+        changeOrigin: true,
+        secure: true,
+        rewrite: () => '/logo.gif',
+      },
+    },
+  },
 })

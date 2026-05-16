@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Denied - Occulo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #050b14;
+            --bg-light: #ffffff;
+            --occulo-blue: #2c6bde;
+            --occulo-glow: rgba(44, 107, 222, 0.4);
+            --text-dark: #0f172a;
+            --text-light: #f8fafc;
+            --glass-bg: rgba(5, 11, 20, 0.6);
+            --glass-border: rgba(44, 107, 222, 0.2);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            background-color: var(--bg-dark);
+            overflow: hidden;
+            position: relative;
+            color: var(--text-light);
+        }
+
+        /* Animated Particles Canvas */
+        #particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Layout Structure */
+        .container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        /* Left Side: Main Occulo Blue */
+        .left-panel {
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: var(--occulo-blue); /* Matching the main frontend hero color */
+            border-right: 1px solid rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .logo-img {
+            width: 100%;
+            max-width: 240px;
+            height: auto;
+            position: relative;
+            z-index: 2;
+            filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.3));
+            animation: breathe 4s ease-in-out infinite;
+        }
+
+        /* Right Side: Clean White SaaS Panel */
+        .right-panel {
+            flex: 1;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 10%;
+            position: relative;
+        }
+
+        .error-code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--occulo-blue);
+            margin-bottom: 1rem;
+            opacity: 0;
+            animation: slideUp 0.6s ease forwards;
+        }
+
+        h1 {
+            font-size: 4rem;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.03em;
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            animation: slideUp 0.6s ease 0.1s forwards;
+        }
+
+        p.explanation {
+            font-size: 1.1rem;
+            color: #64748b;
+            line-height: 1.6;
+            margin-bottom: 2rem;
+            max-width: 400px;
+            opacity: 0;
+            animation: slideUp 0.6s ease 0.2s forwards;
+        }
+
+        /* Geeky Quote Block */
+        .quote-box {
+            border-left: 3px solid var(--occulo-blue);
+            padding-left: 1.5rem;
+            margin-top: 3rem;
+            opacity: 0;
+            animation: slideUp 0.6s ease 0.3s forwards;
+        }
+
+        .quote-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: #475569;
+            font-style: italic;
+        }
+
+        /* Action Button */
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--text-dark);
+            color: white;
+            padding: 14px 28px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            opacity: 0;
+            animation: slideUp 0.6s ease 0.4s forwards;
+            border: 1px solid transparent;
+        }
+
+        .btn-back:hover {
+            background: var(--occulo-blue);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px var(--occulo-glow);
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Sleeping Orange Cat */
+        .cat-container {
+            position: absolute;
+            bottom: 0;
+            right: 10%;
+            width: 170px;
+            height: 100px;
+            z-index: 10;
+        }
+
+        .wall {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 10px;
+            background: #cbd5e1;
+            border-radius: 4px 4px 0 0;
+        }
+
+        /* SVG Cat realistic */
+        .cat-svg {
+            position: absolute;
+            bottom: -5px; /* Fixed gap: SVG viewBox has empty space at bottom */
+            left: 0;
+            width: 170px;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.15));
+        }
+
+        .thought-bubble {
+            position: absolute;
+            top: -15px;
+            right: 20px;
+            background: white;
+            color: #ea580c;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            opacity: 0;
+            transform: scale(0.8) translateY(10px);
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .thought-bubble.show {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+
+        .thought-bubble::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 14px;
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        .cat-tail {
+            transform-origin: 125px 65px;
+            animation: tailWag 6s ease-in-out infinite;
+        }
+
+        @keyframes tailWag {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(-15deg); }
+        }
+
+        /* Loading Overlay */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-dark);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease;
+        }
+
+        .loader-ring {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(44, 107, 222, 0.2);
+            border-top-color: var(--occulo-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .container { flex-direction: column; }
+            .left-panel { border-right: none; border-bottom: 1px solid var(--glass-border); padding: 4rem 2rem; }
+            .right-panel { padding: 3rem 2rem; }
+            h1 { font-size: 3rem; }
+            .cat-container { right: 5%; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Initial Loading Overlay -->
+    <div id="loader">
+        <div class="loader-ring"></div>
+    </div>
+
+    <!-- Particle Background -->
+    <canvas id="particles"></canvas>
+
+    <div class="container">
+        <!-- Left Panel: Occulo Brand -->
+        <div class="left-panel">
+            <img src="/logo.svg" alt="Occulo" class="logo-img">
+        </div>
+
+        <!-- Right Panel: Info & Action -->
+        <div class="right-panel">
+            <div class="error-code">ERR_403_FORBIDDEN</div>
+            <h1>Access<br>Denied</h1>
+            <p class="explanation">Your account is not authorized for this Occulo environment. Please ensure you are logging in with the correct administrative credentials.</p>
+            
+            <a href="/" class="btn-back">Return to Main Terminal</a>
+
+            <div class="quote-box">
+                <div class="quote-text" id="quote-display">Loading protocol...</div>
+            </div>
+
+            <!-- Realistic Sleeping Orange Cat -->
+            <div class="cat-container">
+                <div class="thought-bubble" id="cat-bubble">Zzz...</div>
+                <div class="wall"></div>
+                <svg class="cat-svg" viewBox="0 0 170 120" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <clipPath id="eyeMaskL"><ellipse cx="-16" cy="-4" rx="10" ry="13"/></clipPath>
+                        <clipPath id="eyeMaskR"><ellipse cx="16" cy="-4" rx="10" ry="13"/></clipPath>
+                    </defs>
+
+                    <!-- Tail -->
+                    <path id="cat-tail" class="cat-tail" d="M 115,100 C 145,100 155,75 140,55 C 130,45 115,50 125,65 C 135,80 125,95 115,95" fill="none" stroke="#fb923c" stroke-width="12" stroke-linecap="round"/>
+                    
+                    <!-- Body -->
+                    <path d="M 35,105 C 35,50 95,50 115,70 C 130,85 130,105 130,105 L 35,105 Z" fill="#fb923c"/>
+                    <path d="M 75,70 C 90,70 105,85 105,105" fill="none" stroke="#f97316" stroke-width="5" stroke-linecap="round"/>
+                    
+                    <!-- Interactive Head -->
+                    <g id="cat-head" style="transform-origin: 60px 65px; transform: translate(60px, 65px);">
+                        <!-- Left Ear -->
+                        <polygon points="-20,-18 -30,-40 -5,-25" fill="#fb923c" stroke="#fb923c" stroke-width="6" stroke-linejoin="round"/>
+                        <polygon points="-20,-22 -26,-36 -10,-28" fill="#ffedd5"/>
+                        <!-- Right Ear -->
+                        <polygon points="20,-18 30,-40 5,-25" fill="#fb923c" stroke="#fb923c" stroke-width="6" stroke-linejoin="round"/>
+                        <polygon points="20,-22 26,-36 10,-28" fill="#ffedd5"/>
+                        
+                        <!-- Face -->
+                        <ellipse cx="0" cy="5" rx="36" ry="30" fill="#fb923c"/>
+                        
+                        <!-- Muzzle -->
+                        <ellipse cx="0" cy="16" rx="16" ry="10" fill="#ffedd5"/>
+                        
+                        <!-- Blush -->
+                        <ellipse cx="-20" cy="14" rx="6" ry="3" fill="#f472b6" opacity="0.4"/>
+                        <ellipse cx="20" cy="14" rx="6" ry="3" fill="#f472b6" opacity="0.4"/>
+
+                        <!-- Nose -->
+                        <polygon points="-3,11 3,11 0,14" fill="#f472b6" stroke="#f472b6" stroke-width="2" stroke-linejoin="round"/>
+                        
+                        <!-- Mouth (Cute W) -->
+                        <path d="M -6,16 Q -3,20 0,16 Q 3,20 6,16" fill="none" stroke="#78350f" stroke-width="1.5" stroke-linecap="round"/>
+                        
+                        <!-- Whiskers -->
+                        <path d="M -18,14 L -35,10 M -20,18 L -38,18 M -18,22 L -35,26" fill="none" stroke="#ffedd5" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+                        <path d="M 18,14 L 35,10 M 20,18 L 38,18 M 18,22 L 35,26" fill="none" stroke="#ffedd5" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+
+                        <!-- Left Eye -->
+                        <g clip-path="url(#eyeMaskL)">
+                            <ellipse cx="-16" cy="-4" rx="10" ry="13" fill="#ffffff"/>
+                            <ellipse id="pupil-l" cx="-16" cy="-4" rx="5.5" ry="11" fill="#0f172a"/>
+                            <circle cx="-18" cy="-8" r="3" fill="#ffffff"/> <!-- Main shine -->
+                            <circle cx="-13" cy="-1" r="1.5" fill="#ffffff"/> <!-- Secondary shine -->
+                            <rect id="lid-l" x="-28" y="-19" width="26" height="28" fill="#f97316"/>
+                        </g>
+                        
+                        <!-- Right Eye -->
+                        <g clip-path="url(#eyeMaskR)">
+                            <ellipse cx="16" cy="-4" rx="10" ry="13" fill="#ffffff"/>
+                            <ellipse id="pupil-r" cx="16" cy="-4" rx="5.5" ry="11" fill="#0f172a"/>
+                            <circle cx="14" cy="-8" r="3" fill="#ffffff"/>
+                            <circle cx="19" cy="-1" r="1.5" fill="#ffffff"/>
+                            <rect id="lid-r" x="4" y="-19" width="26" height="28" fill="#f97316"/>
+                        </g>
+                    </g>
+                </svg>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Remove Loader smoothly ---
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const loader = document.getElementById('loader');
+                loader.style.opacity = '0';
+                setTimeout(() => loader.remove(), 500);
+            }, 300);
+        });
+
+        // --- 2. Geeky Quote Generator ---
+        const quotes = [
+            "The quieter the system, the deeper the protocol.",
+            "Not every node is meant to connect.",
+            "Authentication failed. Curiosity detected.",
+            "The cat has seen your packet. Access still denied.",
+            "Shadows in the firewall. Identity unrecognized.",
+            "Zero trust architecture working exactly as intended.",
+            "You knocked, but the port remains closed.",
+            "Some data is best left unseen."
+        ];
+        document.getElementById('quote-display').innerText = `"${quotes[Math.floor(Math.random() * quotes.length)]}"`;
+
+        // --- 3. Animated Particles Canvas (Left Side Only Effect) ---
+        const canvas = document.getElementById('particles');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height, particles = [];
+
+        function init() {
+            width = canvas.width = window.innerWidth / (window.innerWidth > 900 ? 2 : 1);
+            height = canvas.height = window.innerHeight;
+            particles = [];
+            for (let i = 0; i < 50; i++) {
+                particles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    size: Math.random() * 2 + 0.5,
+                    vx: (Math.random() - 0.5) * 0.5,
+                    vy: (Math.random() - 0.5) * 0.5,
+                    alpha: Math.random() * 0.5 + 0.1
+                });
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, width, height);
+            
+            particles.forEach(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                
+                // Wrap around
+                if (p.x < 0) p.x = width;
+                if (p.x > width) p.x = 0;
+                if (p.y < 0) p.y = height;
+                if (p.y > height) p.y = 0;
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+                ctx.fill();
+            });
+        }
+
+        window.addEventListener('resize', init);
+        init();
+        animate();
+        // --- 4. Interactive Cat Animation ---
+        const catContainer = document.querySelector('.cat-container');
+        const catHead = document.getElementById('cat-head');
+        const pupilL = document.getElementById('pupil-l');
+        const pupilR = document.getElementById('pupil-r');
+        const lidL = document.getElementById('lid-l');
+        const lidR = document.getElementById('lid-r');
+        const catTail = document.getElementById('cat-tail');
+        const catBubble = document.getElementById('cat-bubble');
+
+        let isCatAwake = false;
+
+        // Initial Sleepy State
+        lidL.setAttribute('height', '28');
+        lidR.setAttribute('height', '28');
+
+        document.addEventListener('mousemove', (e) => {
+            const headRect = catHead.getBoundingClientRect();
+            // Cat Head Center
+            const headX = headRect.left + headRect.width / 2;
+            const headY = headRect.top + headRect.height / 2;
+            
+            const dx = e.clientX - headX;
+            const dy = e.clientY - headY;
+            
+            // Distance calculations
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const maxDist = 500; // Activation distance
+            
+            // Angle to cursor
+            const angle = Math.atan2(dy, dx);
+            
+            // 1. Proximity -> Sleepiness (Eyelids)
+            // 0 = fully awake, 1 = fully asleep
+            const sleepiness = Math.min(1, Math.max(0, dist / maxDist));
+            isCatAwake = sleepiness < 0.5; // Awake if cursor is close enough
+            
+            // Eyelid height ranges from 0 (awake) to 28 (asleep)
+            // Add a small curve to make snapping awake faster
+            const lidHeight = Math.pow(sleepiness, 0.5) * 28;
+            lidL.setAttribute('height', lidHeight);
+            lidR.setAttribute('height', lidHeight);
+            
+            // 2. Look Direction -> Pupils
+            // Max pupil travel distance is ~3px (since pupils are very big now)
+            const maxPupilDist = 3;
+            // Pupils track less when sleeping
+            const trackingFactor = 1 - (sleepiness * 0.8);
+            const px = Math.cos(angle) * maxPupilDist * trackingFactor;
+            const py = Math.sin(angle) * maxPupilDist * trackingFactor;
+            
+            pupilL.setAttribute('cx', -16 + px);
+            pupilL.setAttribute('cy', -4 + py);
+            pupilR.setAttribute('cx', 16 + px);
+            pupilR.setAttribute('cy', -4 + py);
+            
+            // 3. Head Rotation
+            // Map the cursor's X position to a slight head rotation (-15deg to 15deg)
+            const rotateMax = 15;
+            // Center of screen
+            const screenCenterX = window.innerWidth / 2;
+            const rotate = ((e.clientX - screenCenterX) / screenCenterX) * rotateMax * trackingFactor;
+            catHead.style.transform = `translate(60px, 65px) rotate(${rotate}deg)`;
+            
+            // 4. Tail Wag Speed based on proximity
+            // 6s when sleeping, 2s when fully awake (and annoyed by the cursor)
+            const wagSpeed = 2 + (sleepiness * 4);
+            catTail.style.animationDuration = `${wagSpeed}s`;
+        });
+
+        // 5. Random Thought Bubble
+        setInterval(() => {
+            // 30% chance to show a bubble every 3 seconds if not already showing
+            if (Math.random() < 0.3 && !catBubble.classList.contains('show')) {
+                catBubble.innerText = isCatAwake ? "prr prr" : "Zzz...";
+                catBubble.classList.add('show');
+                
+                // Hide after 2 seconds
+                setTimeout(() => {
+                    catBubble.classList.remove('show');
+                }, 2000);
+            }
+        }, 3000);
+    </script>
+</body>
+</html>

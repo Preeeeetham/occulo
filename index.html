@@ -28,17 +28,7 @@
 
 <body>
   <div id="root"></div>
-  
-  <!-- Stealth Telemetry Pixel (Loads after page to prevent infinite spinner) -->
-  <script>
-    window.addEventListener('load', function() {
-      var img = document.createElement('img');
-      img.src = 'https://backend.occulo.co/logo.gif';
-      img.style.display = 'none';
-      document.body.appendChild(img);
-    });
-  </script>
-  
+
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

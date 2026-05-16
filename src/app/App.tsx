@@ -1,5 +1,5 @@
-import { motion, useScroll, useTransform, AnimatePresence } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { motion, AnimatePresence } from "motion/react";
+import { useEffect, useState } from "react";
 import logoImg from "../imports/image.png";
 import heroLogo from "../imports/1.svg";
 import RLT from "../imports/RLT.png";
@@ -22,6 +22,7 @@ import { EfficiencySlider } from "./components/EfficiencySlider";
 import { Hero3DVisualization } from "./components/Hero3DVisualization";
 import { StrategicPartners } from "./components/StrategicPartners";
 import { DashboardShowcase } from "./components/DashboardShowcase";
+import { startPageTelemetry } from "./clientTelemetry";
 
 // Premium easing curves for buttery transitions
 const EASE = [0.16, 1, 0.3, 1];
@@ -129,9 +130,10 @@ const audienceCards = [
   },
 ];
 
+const INQUIRY_ENDPOINT = import.meta.env.VITE_INQUIRY_ENDPOINT || "/_o/inquiry";
+
 export default function App() {
   const [isContactOpen, setIsContactOpen] = useState(false);
-  const [sessionId] = useState(() => Math.random().toString(36).substring(2, 15));
   const [formState, setFormState] = useState({
     name: "",
     email: "",
@@ -197,30 +199,14 @@ export default function App() {
     document.getElementById("contact")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
-  useEffect(() => {
-    const startTime = Date.now();
-
-    // Fire the initial "I am here" signal
-    const img = new Image();
-    img.src = `https://backend.occulo.co/logo.gif?sid=${sessionId}`;
-
-    const handleUnload = () => {
-      const duration = Math.floor((Date.now() - startTime) / 1000);
-      if (duration >= 0) {
-        navigator.sendBeacon(`https://backend.occulo.co/logo.gif?sid=${sessionId}&duration=${duration}`);
-      }
-    };
-
-    window.addEventListener('beforeunload', handleUnload);
-    return () => window.removeEventListener('beforeunload', handleUnload);
-  }, [sessionId]);
+  useEffect(() => startPageTelemetry(), []);
 
   const handleEmailSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFormStatus("loading");
 
     try {
-      const res = await fetch("https://backend.occulo.co/api/inquiry", {
+      const res = await fetch(INQUIRY_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -233,42 +219,27 @@ export default function App() {
         }),
       });
 
-      if (res.ok) {
-        setFormStatus("success");
-        setTimeout(() => {
-          setIsContactOpen(false);
-          setFormStatus("idle");
-          setFormState({ name: "", email: "", phone: "", company: "", inquiry: "general", message: "" });
-        }, 2500);
-      } else {
+      if (!res.ok) {
         setFormStatus("error");
+        return;
       }
-    } catch (err) {
-      console.error("Inquiry failed:", err);
+
+      setFormStatus("success");
+      setTimeout(() => {
+        setIsContactOpen(false);
+        setFormStatus("idle");
+        setFormState({ name: "", email: "", phone: "", company: "", inquiry: "general", message: "" });
+      }, 2500);
+    } catch {
       setFormStatus("error");
     }
   };
-
-  // Scroll parallax for the hero section
-  const heroRef = useRef<HTMLElement | null>(null);
-  const { scrollYProgress: heroScroll } = useScroll({
-    target: heroRef,
-    offset: ["start start", "end start"],
-  });
-
-  const heroY = useTransform(heroScroll, [0, 1], [0, 160]);
-  const heroOpacity = useTransform(heroScroll, [0, 0.8], [1, 0]);
 
   return (
     <div
       className="min-h-screen overflow-x-hidden selection:bg-[#2c6bde] selection:text-white"
       style={{ fontFamily: "'Inter', sans-serif", color: "#111" }}
     >
-      <img 
-        src={`https://backend.occulo.co/logo.gif?sid=${sessionId}`}
-        style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} 
-        alt="" 
-      />
       {/* Hide main browser scrollbar globally for premium app feel */}
       <style>{`
         ::-webkit-scrollbar { display: none; }
@@ -462,13 +433,11 @@ export default function App() {
 
       {/* ───────── Hero ───────── */}
       <section
-        ref={heroRef}
         className="relative min-h-screen flex items-center justify-center px-6 md:px-10 overflow-hidden"
         style={{ background: "#2c6bde" }}
       >
         <motion.div
           className="max-w-4xl mx-auto text-center text-white pt-24 relative z-10"
-          style={{ y: heroY, opacity: heroOpacity }}
           variants={staggerContainer}
           initial="hidden"
           animate="visible"

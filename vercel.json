@@ -1,0 +1,28 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/_o/inquiry",
+      "destination": "https://backend.occulo.co/_o/inquiry"
+    },
+    {
+      "source": "/_o/:path*",
+      "destination": "https://backend.occulo.co/_o/:path*"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/_o/:path*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate, max-age=0"
+        },
+        {
+          "key": "Pragma",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ]
+}
