@@ -48,8 +48,20 @@ function sendSignal(data: Record<string, string>, preferBeacon: boolean) {
 }
 
 export function startPageTelemetry() {
-  const sid = createSessionId();
-  const startedAt = Date.now();
+  // Try to retrieve existing session ID from sessionStorage to survive page refreshes and React double-mounts
+  let sid = sessionStorage.getItem("occulo_session_id");
+  if (!sid) {
+    sid = createSessionId();
+    sessionStorage.setItem("occulo_session_id", sid);
+  }
+
+  // Track session duration relative to the initial tab session load time
+  let sessionStartStr = sessionStorage.getItem("occulo_session_start");
+  if (!sessionStartStr) {
+    sessionStartStr = String(Date.now());
+    sessionStorage.setItem("occulo_session_start", sessionStartStr);
+  }
+  const startedAt = Number(sessionStartStr);
   let lastDuration = -1;
 
   const duration = () => Math.max(0, Math.floor((Date.now() - startedAt) / 1000));

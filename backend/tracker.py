@@ -1,10 +1,12 @@
 import os, json, psycopg2, requests, uuid, time
 from psycopg2.extras import RealDictCursor
-from datetime import datetime, timezone
-from flask import Flask, request, Response, jsonify, session, redirect, url_for, render_template
+from datetime import datetime, timezone, timedelta
+from flask import Flask, request, Response, jsonify, session, redirect, url_for, render_template, g
 from flask_cors import CORS
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
+from ip_resolver import get_real_ip
+from geo_service import get_geo_info, cache as redis_cache
 
 load_dotenv()
 
@@ -13,7 +15,8 @@ os.environ['AUTHLIB_INSECURE_TRANSPORT'] = '1'
 
 app = Flask(__name__)
 from werkzeug.middleware.proxy_fix import ProxyFix
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+# Trust 2 proxies (Cloudflare + Railway) to get the real User IP
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=2, x_proto=2, x_host=2)
 
 app.secret_key = os.getenv("SECRET_KEY", "occulo_fallback_secret_dev_only")
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
@@ -62,7 +65,7 @@ def init_db():
             id SERIAL PRIMARY KEY, name TEXT, email TEXT, message TEXT,
             company TEXT, phone TEXT, inquiry_type TEXT,
             country TEXT, device TEXT, timestamp TIMESTAMPTZ)''')
-    for col in ['path','last_event','updated_at']: ensure_col(conn,'sessions',col,'TEXT')
+    for col in ['path','last_event','updated_at','ip']: ensure_col(conn,'sessions',col,'TEXT')
     for col in ['company','phone','inquiry_type']: ensure_col(conn,'inquiries',col,'TEXT')
     conn.commit()
     conn.close()
@@ -72,6 +75,34 @@ def no_store(resp):
     resp.headers['Cache-Control'] = 'no-store'
     return resp
 
+@app.before_request
+def handle_session():
+    # Enforce permanent session to respect the TTL
+    session.permanent = True
+    is_new_session = False
+    sid = session.get("session_id")
+    
+    if not sid:
+        sid = str(uuid.uuid4())
+        session["session_id"] = sid
+        is_new_session = True
+        
+    g.session_id = sid
+    
+    # Only perform expensive IP and Geo lookups for new sessions
+    if is_new_session:
+        ip, source, trusted = get_real_ip(request)
+        g.geo_data = get_geo_info(ip, source, trusted)
+        # Log to debug for verification
+        print(f"New Session Created: {sid} | Source: {source} | Trusted: {trusted}")
+    
+    # Refresh TTL in Redis on every request to track active presence
+    if redis_cache:
+        try:
+            redis_cache.setex(f"session:active:{sid}", 3600, "1")
+        except Exception as e:
+            print(f"Redis Session Refresh Error: {e}")
+
 def get_payload():
     d = {}
     if request.is_json: d.update(request.get_json(silent=True) or {})
@@ -80,16 +111,23 @@ def get_payload():
     return d
 
 def get_geo():
+    # If geo_data was precomputed in handle_session, use it
+    if hasattr(g, 'geo_data') and g.geo_data:
+        return g.geo_data.get('country', 'US'), g.geo_data.get('city', 'Unknown')
+    
+    # Fallback to direct resolution using ip_resolver and geo_service
+    try:
+        ip, source, trusted = get_real_ip(request)
+        geo = get_geo_info(ip, source, trusted)
+        return geo.get('country', 'US'), geo.get('city', 'Unknown')
+    except Exception as e:
+        print(f"Fallback GeoIP Resolution failed: {e}")
+        
+    # Standard Cloudflare header check as secondary fallback
     cc = request.headers.get('CF-IPCountry')
     rg = request.headers.get('CF-IPRegion', 'Unknown')
-    if cc and cc != 'XX': return cc, rg
-    ip = request.headers.get('CF-Connecting-IP') or request.headers.get('X-Forwarded-For','').split(',')[0].strip() or request.remote_addr
-    try:
-        r = requests.get(f"http://ip-api.com/json/{ip}?fields=status,countryCode,regionName", timeout=2)
-        if r.ok:
-            j = r.json()
-            if j.get('status')=='success': return j.get('countryCode'), j.get('regionName')
-    except: pass
+    if cc and cc not in ['XX', 'T1']: 
+        return cc, rg
     return "US", "Unknown"
 
 def get_device():
@@ -133,6 +171,12 @@ def callback():
 
 @app.route('/logout')
 def logout():
+    sid = session.pop("session_id", None)
+    if sid and redis_cache:
+        try:
+            redis_cache.delete(f"session:active:{sid}")
+        except Exception as e:
+            print(f"Redis Session Cleanup Error: {e}")
     session.clear()
     return redirect('/')
 
@@ -156,17 +200,48 @@ def serve_logo():
 @app.route('/_o/p.gif', methods=['GET','POST'])
 def beacon():
     d = get_payload()
-    sid = (d.get('sid') or '').strip() or str(uuid.uuid4())
+    sid = (d.get('sid') or '').strip()
     dur = d.get('duration')
+    path = d.get('path', '/')
+    event = d.get('event', 'ping')
     country, region = get_geo()
     device = get_device()
     now = datetime.now(timezone.utc)
     iso = now.isoformat()
+    ip, _, _ = get_real_ip(request)
+
+    # Tighten session de-duplication:
+    # If no sid is provided by the client, look for an active session from the same IP
+    # within the last 30 minutes. If one exists, reuse it to prevent duplicate sessions.
+    if not sid:
+        cutoff = (now - timedelta(minutes=30)).isoformat()
+        conn = get_db()
+        try:
+            with conn.cursor() as cur:
+                cur.execute('SELECT id FROM sessions WHERE ip=%s AND timestamp > %s ORDER BY timestamp DESC LIMIT 1', (ip, cutoff))
+                row = cur.fetchone()
+                if row:
+                    sid = row[0]
+        except Exception as e:
+            print(f"Error querying active session: {e}")
+        finally:
+            conn.close()
+
+    # Generate a fresh session ID only if no existing active session is resolved
+    if not sid:
+        sid = str(uuid.uuid4())
 
     conn = get_db()
     with conn.cursor() as cur:
-        cur.execute('INSERT INTO sessions (id,country,region,device,duration_sec,date,hour,timestamp) VALUES (%s,%s,%s,%s,0,%s,%s,%s) ON CONFLICT (id) DO NOTHING',
-            (sid, country, region, device, now.strftime('%Y-%m-%d'), now.hour, iso))
+        cur.execute('''INSERT INTO sessions 
+            (id,country,region,device,duration_sec,date,hour,timestamp,ip,path,last_event,updated_at) 
+            VALUES (%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s) 
+            ON CONFLICT (id) DO UPDATE SET 
+                ip=EXCLUDED.ip, 
+                path=EXCLUDED.path, 
+                last_event=EXCLUDED.last_event, 
+                updated_at=EXCLUDED.updated_at''',
+            (sid, country, region, device, now.strftime('%Y-%m-%d'), now.hour, iso, ip, path, event, iso))
         if dur:
             try: cur.execute('UPDATE sessions SET duration_sec=GREATEST(COALESCE(duration_sec,0),%s) WHERE id=%s', (int(float(dur)), sid))
             except: pass
@@ -229,9 +304,21 @@ def api_data():
     conn = get_db()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 2000')
-        s = [dict(r) for r in cur.fetchall()]
+        s = []
+        for r in cur.fetchall():
+            row = dict(r)
+            for k in ['timestamp', 'updated_at']:
+                if row.get(k) and hasattr(row[k], 'isoformat'):
+                    row[k] = row[k].isoformat()
+            s.append(row)
+            
         cur.execute('SELECT * FROM inquiries ORDER BY timestamp DESC')
-        i = [dict(r) for r in cur.fetchall()]
+        i = []
+        for r in cur.fetchall():
+            row = dict(r)
+            if row.get('timestamp') and hasattr(row['timestamp'], 'isoformat'):
+                row['timestamp'] = row['timestamp'].isoformat()
+            i.append(row)
     conn.close()
     return no_store(jsonify({"sessions": s, "inquiries": i}))
 
@@ -285,6 +372,11 @@ tr:hover td{{background:#fafbff}}
 .bar{{display:flex;align-items:center;gap:8px}}.bar i{{height:5px;background:var(--p);border-radius:3px;display:block}}
 .empty{{text-align:center;padding:60px;color:var(--dim);font-size:.9rem}}
 .tab{{display:none}}.tab.on{{display:block}}
+.sub-tab-btn{{background:transparent;border:none;padding:6px 12px;font-size:.82rem;font-weight:700;color:var(--dim);cursor:pointer;border-radius:6px;transition:all .2s;display:flex;align-items:center;gap:6px}}
+.sub-tab-btn:hover{{background:#f1f5f9;color:var(--p)}}
+.sub-tab-btn.on{{background:var(--p);color:white}}
+.live-indicator-dot{{width:8px;height:8px;background:#10b981;border-radius:50%;display:inline-block;box-shadow:0 0 8px #10b981;animation:live-pulse 1.5s infinite}}
+@keyframes live-pulse{{0%{{transform:scale(.9);opacity:.6}}50%{{transform:scale(1.2);opacity:1;box-shadow:0 0 12px #10b981}}100%{{transform:scale(.9);opacity:.6}}}}
 </style></head>
 <body>
 <aside>
@@ -294,6 +386,7 @@ tr:hover td{{background:#fafbff}}
   <div class="s-link on" onclick="tab('overview',this)">Overview</div>
   <div class="s-link" onclick="tab('stream',this)">Session Stream</div>
   <div class="s-link" onclick="tab('leads',this)">Leads</div>
+  <div class="s-link" onclick="window.location.href='/deployments'">Deployments</div>
  </div>
  <div class="s-foot">
   <div class="email">{user.get("email","")}</div>
@@ -301,6 +394,7 @@ tr:hover td{{background:#fafbff}}
  </div>
 </aside>
 <main>
+ <div id="error-banner" style="display:none;background:#fef2f2;border:1px solid #fee2e2;color:#b91c1c;padding:12px 20px;border-radius:8px;margin-bottom:20px;font-size:.85rem;font-weight:600;align-items:center;gap:10px">⚠️ <span id="error-msg"></span></div>
  <div class="top"><h1 id="page-title">Overview</h1><div class="live"><div class="dot"></div>LIVE</div></div>
  <div class="kpis">
   <div class="kpi"><small>Total Sessions</small><div class="v" id="k0">—</div></div>
@@ -320,15 +414,30 @@ tr:hover td{{background:#fafbff}}
   </div>
  </div>
 
- <div id="t-stream" class="tab">
-  <div class="c"><h3>Recent Sessions</h3><div id="st"></div></div>
- </div>
+  <div id="t-stream" class="tab">
+   <div class="c">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;border-bottom:1px solid #f1f5f9;padding-bottom:12px">
+     <h3 style="margin:0">Recent Sessions</h3>
+     <div style="display:flex;gap:8px">
+      <button id="btn-all-sessions" class="sub-tab-btn on" onclick="setSessionView('all')">All Sessions</button>
+      <button id="btn-live-sessions" class="sub-tab-btn" onclick="setSessionView('live')">
+        Live Sessions <span class="live-indicator-dot"></span>
+      </button>
+     </div>
+    </div>
+    <div id="st"></div>
+   </div>
+  </div>
 
  <div id="t-leads" class="tab">
   <div class="c"><h3>Captured Leads</h3><div id="lt"></div></div>
  </div>
 </main>
 <script>
+window.onerror=function(msg,url,line){{
+ const b=document.getElementById('error-banner');
+ if(b){{b.style.display='flex';document.getElementById('error-msg').textContent=msg+' at line '+line}}
+}};
 let S=[],I=[],mp,tc,dc,mk=[];
 const CC={{US:[37,-95],GB:[55,-2],IN:[20,78],DE:[51,9],FR:[46,2],CA:[56,-106],AU:[-25,133],JP:[36,138],BR:[-14,-51],SG:[1,103],AE:[24,54],NL:[52,5],HK:[22,114],SE:[62,15],KR:[36,128],IT:[42,12],ES:[40,-4],RU:[61,105],CN:[35,105],ZA:[-30,25],MX:[23,-102],ID:[-5,120],MY:[4,101],TH:[15,100],PK:[30,69],TR:[39,35],PL:[52,20],SA:[24,45],NZ:[-41,174],FI:[64,26],NO:[62,10],CH:[47,8],IE:[53,-8],TW:[24,121],PH:[12,121]}};
 function fl(c){{try{{return c.replace(/./g,x=>String.fromCodePoint(127397+x.charCodeAt()))}}catch{{return c}}}}
@@ -339,7 +448,7 @@ async function load(){{
   const r=await fetch('/api/analytics-data');
   if(r.redirected){{window.location=r.url;return}}
   const d=await r.json();S=d.sessions||[];I=d.inquiries||[];render();
- }}catch(e){{}}
+ }}catch(e){{console.error("Analytics Load/Render Error:",e)}}
 }}
 
 function render(){{
@@ -375,9 +484,7 @@ function render(){{
  document.getElementById('geo').innerHTML=sorted.length?gt+'</table>':'<div class="empty">No geographic data yet</div>';
 
  // Sessions table
- let st='<table><tr><th>Time</th><th>Country</th><th>Region</th><th>Device</th><th>Duration</th></tr>';
- S.slice(0,20).forEach(s=>{{st+=`<tr><td>${{(s.timestamp||'').substring(11,19)}}</td><td><span class="tg">${{fl(s.country)}} ${{s.country}}</span></td><td>${{s.region||'—'}}</td><td>${{s.device}}</td><td>${{fd(s.duration_sec||0)}}</td></tr>`}});
- document.getElementById('st').innerHTML=S.length?st+'</table>':'<div class="empty">Awaiting first visitor on occulo.co</div>';
+ renderSessionsTable();
 
  // Leads table
  let lt='<table><tr><th>Name</th><th>Email</th><th>Type</th><th>Message</th></tr>';
@@ -407,10 +514,123 @@ dc=new Chart(document.getElementById('dc'),{{
  options:{{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{{legend:{{position:'bottom',labels:{{color:'#64748b',font:{{family:'Inter',weight:'600'}},padding:14}}}}}}}}
 }});
 
+let currentSessionView='all';
+function setSessionView(v){{
+ currentSessionView=v;
+ document.getElementById('btn-all-sessions').classList.toggle('on',v==='all');
+ document.getElementById('btn-live-sessions').classList.toggle('on',v==='live');
+ renderSessionsTable();
+}}
+
+function renderSessionsTable(){{
+ const now=new Date();
+ const filtered=S.filter(s=>{{
+  if(currentSessionView==='all')return true;
+  const ts=(s.updated_at||s.timestamp||'').replace(' ','T');
+  if(!ts)return false;
+  return (now - new Date(ts)) < 60000;
+ }});
+ let st='<table><tr><th>Time</th><th>IP Address</th><th>Country</th><th>Region</th><th>Device</th><th>Last Event</th><th>Duration</th></tr>';
+ filtered.slice(0,20).forEach(s=>{{
+  const ts=(s.updated_at||s.timestamp||'').replace(' ','T');
+  const timeStr=ts?ts.substring(11,19):'—';
+  const isLive=ts && (now - new Date(ts)) < 60000;
+  const dot=isLive?'<span class="live-indicator-dot" style="margin-right:6px"></span>':'';
+  st+=`<tr><td>${{timeStr}}</td><td><code style="font-family:'JetBrains Mono',monospace;font-size:.78rem;background:#eff6ff;color:#2c6bde;padding:3px 6px;border-radius:4px;font-weight:700">${{s.ip||'—'}}</code></td><td><span class="tg">${{fl(s.country)}} ${{s.country}}</span></td><td>${{s.region||'—'}}</td><td>${{s.device}}</td><td><div style="display:flex;align-items:center">${{dot}}<span class="tg">${{s.last_event||'pageview'}}</span></div></td><td>${{fd(s.duration_sec||0)}}</td></tr>`
+ }});
+ const emptyMsg=currentSessionView==='live'?'No active visitors online right now':'Awaiting first visitor on occulo.co';
+ document.getElementById('st').innerHTML=filtered.length?st+'</table>':`<div class="empty">${{emptyMsg}}</div>`;
+}}
+
 load();setInterval(load,10000);
 </script>
 </body></html>'''
     return no_store(Response(html, mimetype='text/html'))
+
+@app.route('/deployments')
+@auth_required
+def deployments_page():
+    user = session.get('user', {})
+    return render_template('deployments.html', user=user)
+
+@app.route('/api/deployments')
+@auth_required
+def api_deployments():
+    supabase_url = os.getenv("SUPABASE_URL", "https://xioqjopumlnpudxvtnic.supabase.co")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    
+    if not supabase_key:
+        print("Error: SUPABASE_SERVICE_ROLE_KEY is missing. Cannot fetch deployments.")
+        return jsonify([])
+
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}"
+    }
+
+    try:
+        # Fetch deployments via REST API bypassing RLS
+        dep_res = requests.get(f"{supabase_url}/rest/v1/deployments?select=*&order=deployed_at.desc", headers=headers, timeout=10)
+        if not dep_res.ok:
+            print("Failed to fetch deployments:", dep_res.text)
+            return jsonify([])
+        deployments = dep_res.json()
+
+        # Fetch users from Auth Admin API to map technician profiles
+        users_res = requests.get(f"{supabase_url}/auth/v1/admin/users", headers=headers, timeout=10)
+        users_data = users_res.json() if users_res.ok else {}
+        
+        # Parse the users array (newer Supabase returns dict with "users" key)
+        users_list = users_data.get("users", []) if isinstance(users_data, dict) else (users_data if isinstance(users_data, list) else [])
+
+        # Build technician mapping dictionary
+        tech_map = {}
+        for u in users_list:
+            meta = u.get("raw_user_meta_data") or {}
+            tech_map[u["id"]] = {
+                "email": u.get("email", "Unknown"),
+                "name": meta.get("full_name", "Unknown Technician")
+            }
+
+        # Enrich deployments with technician details
+        for d in deployments:
+            tech_id = d.get("technician_id")
+            info = tech_map.get(tech_id, {"email": "Unknown", "name": "Unknown Technician"})
+            d["technician_email"] = info["email"]
+            d["technician_name"] = info["name"]
+
+        return jsonify(deployments)
+    except Exception as e:
+        print("Backend Supabase API error:", e)
+        return jsonify([])
+
+@app.route('/api/technician/<uuid>')
+@auth_required
+def api_technician(uuid):
+    supabase_url = os.getenv("SUPABASE_URL", "https://xioqjopumlnpudxvtnic.supabase.co")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    
+    if not supabase_key:
+        return jsonify({"email": "Unknown", "name": "Unknown Technician"})
+        
+    headers = {
+        "apikey": supabase_key,
+        "Authorization": f"Bearer {supabase_key}"
+    }
+    
+    try:
+        r = requests.get(f"{supabase_url}/auth/v1/admin/users/{uuid}", headers=headers, timeout=5)
+        if r.ok:
+            u = r.json()
+            meta = u.get("raw_user_meta_data") or {}
+            return jsonify({
+                "email": u.get("email", "Unknown"),
+                "name": meta.get("full_name", "Unknown Technician")
+            })
+    except Exception as e:
+        print("Error fetching technician metadata:", e)
+        
+    return jsonify({"email": "Unknown", "name": "Unknown Technician"})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.getenv("PORT", 5000)))

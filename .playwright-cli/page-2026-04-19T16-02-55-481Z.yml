@@ -1,0 +1,101 @@
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: OCCULO
+      - link "Contact" [ref=e5] [cursor=pointer]:
+        - /url: "#contact"
+  - generic [ref=e7]:
+    - paragraph [ref=e8]: Spatial Intelligence
+    - heading "Space. Now intelligent. Absolute environmental awareness." [level=1] [ref=e9]:
+      - generic [ref=e10]: Space.
+      - generic [ref=e11]: Now intelligent.
+      - generic [ref=e12]: Absolute environmental awareness.
+    - paragraph [ref=e13]: OCCULO gives physical spaces the ability to understand themselves. Instantly know how any environment is being used — without counting a single person.
+    - generic [ref=e14]:
+      - link "How it works" [ref=e15] [cursor=pointer]:
+        - /url: "#what"
+      - link "Reach us" [ref=e16] [cursor=pointer]:
+        - /url: "#contact"
+  - generic [ref=e19]:
+    - generic [ref=e20]:
+      - paragraph [ref=e21]: Where we operate
+      - paragraph [ref=e22]: Overcrowding doesn't happen only in buildings. It happens wherever people move — and wherever the space around them is not understood.
+    - list "Environments where OCCULO operates" [ref=e23]:
+      - listitem [ref=e24]:
+        - generic [ref=e25]: —
+        - generic [ref=e26]: Transit hubs & stations
+        - generic [ref=e27]: Platforms, concourses, interchange zones
+      - listitem [ref=e28]:
+        - generic [ref=e29]: —
+        - generic [ref=e30]: Public venues & arenas
+        - generic [ref=e31]: Entrances, exits, corridors under event load
+      - listitem [ref=e32]:
+        - generic [ref=e33]: —
+        - generic [ref=e34]: Commercial & institutional spaces
+        - generic [ref=e35]: Lobbies, elevators, stairwells, shared zones
+      - listitem [ref=e36]:
+        - generic [ref=e37]: —
+        - generic [ref=e38]: Outdoor & semi-enclosed environments
+        - generic [ref=e39]: Markets, queues, gathering points
+  - generic [ref=e41]:
+    - generic [ref=e42]:
+      - paragraph [ref=e43]: What we do
+      - heading "We give space a sense of itself." [level=2] [ref=e44]
+    - generic [ref=e45]:
+      - generic [ref=e46]:
+        - generic [ref=e47]:
+          - generic [ref=e48]: "01"
+          - heading "Space-based analysis, not headcount" [level=3] [ref=e49]:
+            - text: Space-based analysis,
+            - text: not headcount
+        - paragraph [ref=e51]: Existing systems count people. We measure how a space is occupied — its density, its distribution, its available capacity at any given moment. Counting arrivals tells you who entered. Spatial analysis tells you whether the space can safely absorb more.
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - generic [ref=e54]: "02"
+          - heading "Signals that arrive before the incident" [level=3] [ref=e55]:
+            - text: Signals that arrive
+            - text: before the incident
+        - paragraph [ref=e57]: Overcrowding is not an event. It is a condition that builds. OCCULO reads that condition continuously — so the people responsible for a space can act on it while there is still time to act.
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]: "03"
+          - heading "Retrofit into existing environments" [level=3] [ref=e61]:
+            - text: Retrofit into
+            - text: existing environments
+        - paragraph [ref=e63]: OCCULO is designed to be added to an environment, not to replace it. It integrates with what is already operational. No structural changes. No extended deployment windows.
+      - generic [ref=e64]:
+        - generic [ref=e65]:
+          - generic [ref=e66]: "04"
+          - heading "No personal data, by design" [level=3] [ref=e67]:
+            - text: No personal data,
+            - text: by design
+        - paragraph [ref=e69]: Spatial analysis does not require identity. OCCULO processes environmental conditions — density, distribution, flow — not individuals. No faces. No tracking. No data that could be personal.
+  - generic [ref=e71]:
+    - paragraph [ref=e72]: Every major crowd incident has one thing in common.
+    - paragraph [ref=e73]: The space was full before anyone in charge knew it was full.
+    - paragraph [ref=e74]: That is the problem we exist to solve.
+  - generic [ref=e76]:
+    - generic [ref=e77]:
+      - heading "Let's talk." [level=2] [ref=e78]
+      - paragraph [ref=e79]: We work with operators, safety teams, and engineers who manage spaces where crowds are a reality — not an exception.
+      - link "contact@occulo.co" [ref=e80] [cursor=pointer]:
+        - /url: mailto:contact@occulo.co
+    - generic [ref=e81]:
+      - generic [ref=e82]:
+        - generic [ref=e83]:
+          - generic [ref=e84]: Name
+          - textbox "Name" [ref=e85]:
+            - /placeholder: Your name
+        - generic [ref=e86]:
+          - generic [ref=e87]: Email
+          - textbox "Email" [ref=e88]:
+            - /placeholder: you@domain.com
+      - generic [ref=e89]:
+        - generic [ref=e90]: Message
+        - textbox "Message" [ref=e91]:
+          - /placeholder: Describe your environment or inquiry…
+      - button "Send" [ref=e93] [cursor=pointer]
+  - contentinfo [ref=e94]:
+    - generic [ref=e95]:
+      - generic [ref=e96]: OCCULO
+      - generic [ref=e97]: © OCCULO
