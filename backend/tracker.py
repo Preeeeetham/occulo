@@ -118,24 +118,31 @@ def get_payload():
     return d
 
 def get_geo():
+    country, city = "Unknown", "Unknown"
+    
     # If geo_data was precomputed in handle_session, use it
     if hasattr(g, 'geo_data') and g.geo_data:
-        return g.geo_data.get('country', 'US'), g.geo_data.get('city', 'Unknown')
-    
-    # Fallback to direct resolution using ip_resolver and geo_service
-    try:
-        ip, source, trusted = get_real_ip(request)
-        geo = get_geo_info(ip, source, trusted)
-        return geo.get('country', 'US'), geo.get('city', 'Unknown')
-    except Exception as e:
-        print(f"Fallback GeoIP Resolution failed: {e}")
-        
+        country = g.geo_data.get('country', 'Unknown')
+        city = g.geo_data.get('city', 'Unknown')
+    else:
+        try:
+            ip, source, trusted = get_real_ip(request)
+            geo = get_geo_info(ip, source, trusted)
+            country = geo.get('country', 'Unknown')
+            city = geo.get('city', 'Unknown')
+        except Exception as e:
+            print(f"Fallback GeoIP Resolution failed: {e}")
+            
     # Standard Cloudflare header check as secondary fallback
-    cc = request.headers.get('CF-IPCountry')
-    rg = request.headers.get('CF-IPRegion', 'Unknown')
-    if cc and cc not in ['XX', 'T1']: 
-        return cc, rg
-    return "US", "Unknown"
+    if country == "Unknown":
+        cc = request.headers.get('CF-IPCountry')
+        if cc and cc not in ['XX', 'T1']: 
+            country = cc
+            
+    if city == "Unknown":
+        city = request.headers.get('CF-IPRegion', 'Unknown')
+        
+    return country if country != "Unknown" else "US", city
 
 def get_device():
     ua = request.headers.get('User-Agent','').lower()
@@ -365,6 +372,7 @@ def dashboard():
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
 :root{{--p:#2c6bde;--bg:#f5f6f8;--card:#fff;--txt:#0f172a;--dim:#64748b;--bdr:#e2e8f0;--r:14px}}
@@ -469,8 +477,9 @@ window.onerror=function(msg,url,line){{
  const b=document.getElementById('error-banner');
  if(b){{b.style.display='flex';document.getElementById('error-msg').textContent=msg+' at line '+line}}
 }};
-let S=[],I=[],mp,tc,dc,mk=[];
-const CC={{US:[37,-95],GB:[55,-2],IN:[20,78],DE:[51,9],FR:[46,2],CA:[56,-106],AU:[-25,133],JP:[36,138],BR:[-14,-51],SG:[1,103],AE:[24,54],NL:[52,5],HK:[22,114],SE:[62,15],KR:[36,128],IT:[42,12],ES:[40,-4],RU:[61,105],CN:[35,105],ZA:[-30,25],MX:[23,-102],ID:[-5,120],MY:[4,101],TH:[15,100],PK:[30,69],TR:[39,35],PL:[52,20],SA:[24,45],NZ:[-41,174],FI:[64,26],NO:[62,10],CH:[47,8],IE:[53,-8],TW:[24,121],PH:[12,121]}};
+let S=[],I=[],mp,tc,dc,heat;
+const CN={"US":"United States","GB":"United Kingdom","IN":"India","DE":"Germany","FR":"France","CA":"Canada","AU":"Australia","JP":"Japan","BR":"Brazil","SG":"Singapore","AE":"United Arab Emirates","NL":"Netherlands","HK":"Hong Kong","SE":"Sweden","KR":"South Korea","IT":"Italy","ES":"Spain","RU":"Russia","CN":"China","ZA":"South Africa","MX":"Mexico","ID":"Indonesia","MY":"Malaysia","TH":"Thailand","PK":"Pakistan","TR":"Turkey","PL":"Poland","SA":"Saudi Arabia","NZ":"New Zealand","FI":"Finland","NO":"Norway","CH":"Switzerland","IE":"Ireland","TW":"Taiwan","PH":"Philippines","AR":"Argentina","CL":"Chile","CO":"Colombia","EG":"Egypt","NG":"Nigeria","KE":"Kenya","VN":"Vietnam","BD":"Bangladesh","UA":"Ukraine","RO":"Romania","BE":"Belgium","AT":"Austria","PT":"Portugal","GR":"Greece","CZ":"Czechia","HU":"Hungary","DK":"Denmark","IL":"Israel"};
+const CC={{US:[37,-95],GB:[55,-2],IN:[20,78],DE:[51,9],FR:[46,2],CA:[56,-106],AU:[-25,133],JP:[36,138],BR:[-14,-51],SG:[1,103],AE:[24,54],NL:[52,5],HK:[22,114],SE:[62,15],KR:[36,128],IT:[42,12],ES:[40,-4],RU:[61,105],CN:[35,105],ZA:[-30,25],MX:[23,-102],ID:[-5,120],MY:[4,101],TH:[15,100],PK:[30,69],TR:[39,35],PL:[52,20],SA:[24,45],NZ:[-41,174],FI:[64,26],NO:[62,10],CH:[47,8],IE:[53,-8],TW:[24,121],PH:[12,121],AR:[-38,-63],CL:[-35,-71],CO:[4,-74],EG:[26,30],NG:[9,8],KE:[0,37],VN:[14,108],BD:[23,90],UA:[48,31],RO:[45,24],BE:[50,4],AT:[47,14],PT:[39,-8],GR:[39,22],CZ:[49,15],HU:[47,19],DK:[56,9],IL:[31,34]}};
 function fl(c){{try{{return c.replace(/./g,x=>String.fromCodePoint(127397+x.charCodeAt()))}}catch{{return c}}}}
 function fd(s){{return s<60?s+'s':Math.floor(s/60)+'m '+(s%60)+'s'}}
 
@@ -492,13 +501,15 @@ function render(totalCount){{
  document.getElementById('k3').textContent=S.length?(I.length/S.length*100).toFixed(1)+'%':'0%';
 
  // Map
- mk.forEach(m=>mp.removeLayer(m));mk=[];
+ if(heat) mp.removeLayer(heat);
  const cc={{}};S.forEach(s=>cc[s.country]=(cc[s.country]||0)+1);
+ const heatPoints = [];
  Object.entries(cc).forEach(([c,n])=>{{
   const co=CC[c];if(!co)return;
-  const m=L.circleMarker(co,{{radius:7+Math.sqrt(n)*4,color:'#2c6bde',fillColor:'#2c6bde',fillOpacity:.5,weight:2}}).addTo(mp);
-  m.bindTooltip(`${{fl(c)}} ${{c}}: ${{n}} sessions`);mk.push(m);
+  heatPoints.push([co[0], co[1], n]);
  }});
+ const maxSessions = Math.max(...Object.values(cc), 1);
+ heat = L.heatLayer(heatPoints, {{radius: 25, blur: 15, maxZoom: 2, max: Math.min(maxSessions, 10), gradient: {{0.4: '#60a5fa', 0.6: '#2c6bde', 0.8: '#1e40af', 1: '#1e3a8a'}}}}).addTo(mp);
 
  // Time chart
  const h=Array(24).fill(0);S.forEach(s=>h[s.hour]++);
@@ -513,7 +524,10 @@ function render(totalCount){{
  const sorted=Object.entries(cc).sort((a,b)=>b[1]-a[1]).slice(0,8);
  const mx=sorted[0]?sorted[0][1]:1;
  let gt='<table><tr><th>Country</th><th>Sessions</th><th>Share</th></tr>';
- sorted.forEach(([c,n])=>{{gt+=`<tr><td>${{fl(c)}} ${{c}}</td><td><div class="bar"><i style="width:${{n/mx*80}}px"></i>${{n}}</div></td><td>${{(n/S.length*100).toFixed(1)}}%</td></tr>`}});
+ sorted.forEach(([c,n])=>{{
+  const cName = CN[c] || c;
+  gt+=`<tr><td>${{fl(c)}} ${{cName}}</td><td><div class="bar"><i style="width:${{n/mx*80}}px"></i>${{n}}</div></td><td>${{(n/S.length*100).toFixed(1)}}%</td></tr>`;
+ }});
  document.getElementById('geo').innerHTML=sorted.length?gt+'</table>':'<div class="empty">No geographic data yet</div>';
 
  // Sessions table
@@ -569,7 +583,8 @@ function renderSessionsTable(){{
   const timeStr=ts?ts.substring(11,19):'—';
   const isLive=ts && (now - new Date(ts)) < 60000;
   const dot=isLive?'<span class="live-indicator-dot" style="margin-right:6px"></span>':'';
-  st+=`<tr><td>${{timeStr}}</td><td><code style="font-family:'JetBrains Mono',monospace;font-size:.78rem;background:#eff6ff;color:#2c6bde;padding:3px 6px;border-radius:4px;font-weight:700">${{s.ip||'—'}}</code></td><td><span class="tg">${{fl(s.country)}} ${{s.country}}</span></td><td>${{s.region||'—'}}</td><td>${{s.device}}</td><td><div style="display:flex;align-items:center">${{dot}}<span class="tg">${{s.last_event||'pageview'}}</span></div></td><td>${{fd(s.duration_sec||0)}}</td></tr>`
+  const cName = CN[s.country] || s.country;
+  st+=`<tr><td>${{timeStr}}</td><td><code style="font-family:'JetBrains Mono',monospace;font-size:.78rem;background:#eff6ff;color:#2c6bde;padding:3px 6px;border-radius:4px;font-weight:700">${{s.ip||'—'}}</code></td><td><span class="tg">${{fl(s.country)}} ${{cName}}</span></td><td>${{s.region||'—'}}</td><td>${{s.device}}</td><td><div style="display:flex;align-items:center">${{dot}}<span class="tg">${{s.last_event||'pageview'}}</span></div></td><td>${{fd(s.duration_sec||0)}}</td></tr>`
  }});
  const emptyMsg=currentSessionView==='live'?'No active visitors online right now':'Awaiting first visitor on occulo.co';
  document.getElementById('st').innerHTML=filtered.length?st+'</table>':`<div class="empty">${{emptyMsg}}</div>`;
