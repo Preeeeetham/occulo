@@ -203,61 +203,67 @@ def serve_logo():
 @app.route('/logo.gif', methods=['GET','POST'])
 @app.route('/_o/p.gif', methods=['GET','POST'])
 def beacon():
-    d = get_payload()
-    sid = (d.get('sid') or '').strip()
+    try:
+        d = get_payload()
+        sid = (d.get('sid') or '').strip()
 
-    # Debug: track incoming beacons
-    print(f"Beacon Received | SID: {sid} | IP: {request.remote_addr}")
+        # Debug: track incoming beacons
+        print(f"Beacon Received | SID: {sid} | IP: {request.remote_addr}")
 
-    dur = d.get('duration')
-    path = d.get('path', '/')
-    event = d.get('event', 'ping')
-    country, region = get_geo()
-    device = get_device()
-    now = datetime.now(timezone.utc)
-    iso = now.isoformat()
-    ip, _, _ = get_real_ip(request)
+        dur = d.get('duration')
+        path = d.get('path', '/')
+        event = d.get('event', 'ping')
+        country, region = get_geo()
+        device = get_device()
+        now = datetime.now(timezone.utc)
+        iso = now.isoformat()
+        ip, _, _ = get_real_ip(request)
 
-    # Tighten session de-duplication:
-    # If no sid is provided by the client, look for an active session from the same IP
-    # within the last 30 minutes. If one exists, reuse it to prevent duplicate sessions.
-    if not sid:
-        cutoff = (now - timedelta(minutes=30)).isoformat()
+        # Tighten session de-duplication:
+        if not sid:
+            cutoff = (now - timedelta(minutes=30)).isoformat()
+            conn = get_db()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute('SELECT id FROM sessions WHERE ip=%s AND timestamp > %s ORDER BY timestamp DESC LIMIT 1', (ip, cutoff))
+                    row = cur.fetchone()
+                    if row:
+                        sid = row[0]
+            except Exception as e:
+                print(f"Error querying active session: {e}")
+            finally:
+                conn.close()
+
+        if not sid:
+            sid = str(uuid.uuid4())
+
         conn = get_db()
         try:
             with conn.cursor() as cur:
-                cur.execute('SELECT id FROM sessions WHERE ip=%s AND timestamp > %s ORDER BY timestamp DESC LIMIT 1', (ip, cutoff))
-                row = cur.fetchone()
-                if row:
-                    sid = row[0]
+                cur.execute('''INSERT INTO sessions
+                    (id,country,region,device,duration_sec,date,hour,timestamp,ip,path,last_event,updated_at)
+                    VALUES (%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (id) DO UPDATE SET
+                        ip=EXCLUDED.ip,
+                        path=EXCLUDED.path,
+                        last_event=EXCLUDED.last_event,
+                        updated_at=EXCLUDED.updated_at''',
+                    (sid, country, region, device, now.strftime('%Y-%m-%d'), now.hour, iso, ip, path, event, iso))
+                if dur:
+                    try: cur.execute('UPDATE sessions SET duration_sec=GREATEST(COALESCE(duration_sec,0),%s) WHERE id=%s', (int(float(dur)), sid))
+                    except: pass
+                conn.commit()
         except Exception as e:
-            print(f"Error querying active session: {e}")
+            print(f"Database Error in beacon: {e}")
+            # We return the GIF anyway so the user doesn't see a 500
         finally:
             conn.close()
 
-    # Generate a fresh session ID only if no existing active session is resolved
-    if not sid:
-        sid = str(uuid.uuid4())
-
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute('''INSERT INTO sessions 
-            (id,country,region,device,duration_sec,date,hour,timestamp,ip,path,last_event,updated_at) 
-            VALUES (%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s) 
-            ON CONFLICT (id) DO UPDATE SET 
-                ip=EXCLUDED.ip, 
-                path=EXCLUDED.path, 
-                last_event=EXCLUDED.last_event, 
-                updated_at=EXCLUDED.updated_at''',
-            (sid, country, region, device, now.strftime('%Y-%m-%d'), now.hour, iso, ip, path, event, iso))
-        if dur:
-            try: cur.execute('UPDATE sessions SET duration_sec=GREATEST(COALESCE(duration_sec,0),%s) WHERE id=%s', (int(float(dur)), sid))
-            except: pass
-        conn.commit()
-    conn.close()
+    except Exception as e:
+        print(f"Critical Error in beacon endpoint: {e}")
 
     resp = Response(PIXEL_GIF, mimetype='image/gif')
-    resp.headers['X-Session-ID'] = sid
+    resp.headers['X-Session-ID'] = sid if 'sid' in locals() else ''
     return no_store(resp)
 
 @app.route('/api/inquiry', methods=['POST'])
