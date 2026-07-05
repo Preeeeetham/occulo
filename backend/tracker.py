@@ -311,6 +311,10 @@ def inquiry():
 def api_data():
     conn = get_db()
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        # Get total count of sessions
+        cur.execute('SELECT COUNT(*) as total FROM sessions')
+        total_sessions = cur.fetchone()['total']
+
         cur.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 2000')
         s = []
         for r in cur.fetchall():
@@ -319,7 +323,7 @@ def api_data():
                 if row.get(k) and hasattr(row[k], 'isoformat'):
                     row[k] = row[k].isoformat()
             s.append(row)
-            
+
         cur.execute('SELECT * FROM inquiries ORDER BY timestamp DESC')
         i = []
         for r in cur.fetchall():
@@ -328,7 +332,7 @@ def api_data():
                 row['timestamp'] = row['timestamp'].isoformat()
             i.append(row)
     conn.close()
-    return no_store(jsonify({"sessions": s, "inquiries": i}))
+    return no_store(jsonify({"sessions": s, "inquiries": i, "total_sessions": total_sessions}))
 
 @app.route('/analytics')
 @app.route('/analytics/')
@@ -455,12 +459,14 @@ async function load(){{
  try{{
   const r=await fetch('/api/analytics-data');
   if(r.redirected){{window.location=r.url;return}}
-  const d=await r.json();S=d.sessions||[];I=d.inquiries||[];render();
+  const d=await r.json();S=d.sessions||[];I=d.inquiries||[];
+  const total=d.total_sessions||S.length;
+  render(total);
  }}catch(e){{console.error("Analytics Load/Render Error:",e)}}
 }}
 
-function render(){{
- document.getElementById('k0').textContent=S.length||'0';
+function render(totalCount){{
+ document.getElementById('k0').textContent=totalCount||'0';
  const avg=S.length?Math.round(S.reduce((a,s)=>a+(s.duration_sec||0),0)/S.length):0;
  document.getElementById('k1').textContent=fd(avg);
  document.getElementById('k2').textContent=I.length||'0';
