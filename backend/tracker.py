@@ -240,22 +240,26 @@ def beacon():
         conn = get_db()
         try:
             with conn.cursor() as cur:
-                cur.execute('''INSERT INTO sessions
-                    (id,country,region,device,duration_sec,date,hour,timestamp,ip,path,last_event,updated_at)
-                    VALUES (%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s)
-                    ON CONFLICT (id) DO UPDATE SET
-                        ip=EXCLUDED.ip,
-                        path=EXCLUDED.path,
-                        last_event=EXCLUDED.last_event,
-                        updated_at=EXCLUDED.updated_at''',
-                    (sid, country, region, device, now.strftime('%Y-%m-%d'), now.hour, iso, ip, path, event, iso))
+                try:
+                    cur.execute('''INSERT INTO sessions
+                        (id,country,region,device,duration_sec,date,hour,timestamp,ip,path,last_event,updated_at)
+                        VALUES (%s,%s,%s,%s,0,%s,%s,%s,%s,%s,%s,%s)''',
+                        (sid, country, region, device, now.strftime('%Y-%m-%d'), now.hour, iso, ip, path, event, iso))
+                    print(f"NEW SESSION CREATED: {sid}")
+                except psycopg2.errors.UniqueViolation:
+                    conn.rollback()
+                    cur.execute('''UPDATE sessions SET
+                        ip=%s, path=%s, last_event=%s, updated_at=%s
+                        WHERE id=%s''',
+                        (ip, path, event, iso, sid))
+                    print(f"EXISTING SESSION UPDATED: {sid}")
+
                 if dur:
                     try: cur.execute('UPDATE sessions SET duration_sec=GREATEST(COALESCE(duration_sec,0),%s) WHERE id=%s', (int(float(dur)), sid))
                     except: pass
                 conn.commit()
         except Exception as e:
             print(f"Database Error in beacon: {e}")
-            # We return the GIF anyway so the user doesn't see a 500
         finally:
             conn.close()
 
@@ -316,29 +320,35 @@ def inquiry():
 @auth_required
 def api_data():
     conn = get_db()
-    with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        # Get total count of sessions
-        cur.execute('SELECT COUNT(*) as total FROM sessions')
-        total_sessions = cur.fetchone()['total']
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Get total count of sessions
+            cur.execute('SELECT COUNT(*) as total FROM sessions')
+            total_sessions = cur.fetchone()['total']
+            print(f"Analytics Request | Total Sessions in DB: {total_sessions}")
 
-        cur.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 2000')
-        s = []
-        for r in cur.fetchall():
-            row = dict(r)
-            for k in ['timestamp', 'updated_at']:
-                if row.get(k) and hasattr(row[k], 'isoformat'):
-                    row[k] = row[k].isoformat()
-            s.append(row)
+            cur.execute('SELECT * FROM sessions ORDER BY timestamp DESC LIMIT 2000')
+            s = []
+            for r in cur.fetchall():
+                row = dict(r)
+                for k in ['timestamp', 'updated_at']:
+                    if row.get(k) and hasattr(row[k], 'isoformat'):
+                        row[k] = row[k].isoformat()
+                s.append(row)
 
-        cur.execute('SELECT * FROM inquiries ORDER BY timestamp DESC')
-        i = []
-        for r in cur.fetchall():
-            row = dict(r)
-            if row.get('timestamp') and hasattr(row['timestamp'], 'isoformat'):
-                row['timestamp'] = row['timestamp'].isoformat()
-            i.append(row)
-    conn.close()
-    return no_store(jsonify({"sessions": s, "inquiries": i, "total_sessions": total_sessions}))
+            cur.execute('SELECT * FROM inquiries ORDER BY timestamp DESC')
+            i = []
+            for r in cur.fetchall():
+                row = dict(r)
+                if row.get('timestamp') and hasattr(row['timestamp'], 'isoformat'):
+                    row['timestamp'] = row['timestamp'].isoformat()
+                i.append(row)
+        return no_store(jsonify({"sessions": s, "inquiries": i, "total_sessions": total_sessions}))
+    except Exception as e:
+        print(f"Error in api_data: {e}")
+        return jsonify({"error": str(e)}), 500
+    finally:
+        conn.close()
 
 @app.route('/analytics')
 @app.route('/analytics/')
