@@ -50,15 +50,12 @@ def get_db():
 
 def ensure_col(conn, tbl, col, defn):
     with conn.cursor() as cur:
-        cur.execute(f"SELECT column_name FROM information_schema.columns WHERE table_name='{tbl}' AND column_name='{col}'")
-        if not cur.fetchone():
-            try:
-                cur.execute(f'ALTER TABLE {tbl} ADD COLUMN {col} {defn}')
-                conn.commit()
-                print(f"Schema Migration: Added column '{col}' to '{tbl}'")
-            except Exception as e:
-                conn.rollback()
-                print(f"Schema Migration Error: Failed to add column '{col}' to '{tbl}': {e}")
+        try:
+            cur.execute(f'ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {defn}')
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f"Schema Migration Error: Failed to add column '{col}' to '{tbl}': {e}")
 
 def init_db():
     conn = get_db()
