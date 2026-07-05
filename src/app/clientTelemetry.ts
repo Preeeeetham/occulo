@@ -24,7 +24,10 @@ function createSessionId() {
 }
 
 function sendSignal(data: Record<string, string>, preferBeacon: boolean) {
-  const body = new URLSearchParams(data);
+  const body = new FormData();
+  Object.entries(data).forEach(([key, value]) => {
+    body.append(key, value);
+  });
 
   if (preferBeacon && typeof navigator.sendBeacon === "function") {
     if (navigator.sendBeacon(SIGNAL_ENDPOINT, body)) {

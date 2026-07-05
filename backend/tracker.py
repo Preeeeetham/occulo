@@ -105,7 +105,11 @@ def handle_session():
 
 def get_payload():
     d = {}
-    if request.is_json: d.update(request.get_json(silent=True) or {})
+    if request.is_json:
+        try:
+            d.update(request.get_json(silent=True) or {})
+        except Exception:
+            pass
     d.update(request.form.to_dict())
     d.update(request.args.to_dict())
     return d
@@ -201,6 +205,10 @@ def serve_logo():
 def beacon():
     d = get_payload()
     sid = (d.get('sid') or '').strip()
+
+    # Debug: track incoming beacons
+    print(f"Beacon Received | SID: {sid} | IP: {request.remote_addr}")
+
     dur = d.get('duration')
     path = d.get('path', '/')
     event = d.get('event', 'ping')
