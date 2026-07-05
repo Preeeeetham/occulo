@@ -375,50 +375,47 @@ def dashboard():
 <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
-:root{{--p:#3b82f6;--bg:#0f172a;--card:rgba(30,41,59,0.7);--txt:#f8fafc;--dim:#94a3b8;--bdr:rgba(255,255,255,0.08);--r:16px;--glass:rgba(15,23,42,0.6);--neon:#0ea5e9}}
+:root{{--p:#2c6bde;--bg:#f5f6f8;--card:#fff;--txt:#0f172a;--dim:#64748b;--bdr:#e2e8f0;--r:14px}}
 *{{box-sizing:border-box;margin:0;padding:0}}
-body{{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;display:flex;min-height:100vh;background-image:radial-gradient(circle at 15% 50%, rgba(59,130,246,0.12), transparent 25%), radial-gradient(circle at 85% 30%, rgba(168,85,247,0.12), transparent 25%)}}
-aside{{width:260px;background:var(--card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-right:1px solid var(--bdr);padding:32px 24px;display:flex;flex-direction:column;position:fixed;top:0;bottom:0;box-shadow:4px 0 24px rgba(0,0,0,0.2), inset -1px 0 0 rgba(255,255,255,0.05)}}
-.brand{{font-weight:800;font-size:1.3rem;background:linear-gradient(90deg, #3b82f6, #8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.02em;margin-bottom:8px}}
-.brand-sub{{font-size:.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:.15em;margin-bottom:40px;font-weight:600}}
+body{{background:var(--bg);color:var(--txt);font-family:'Inter',sans-serif;display:flex;min-height:100vh}}
+aside{{width:260px;background:var(--card);border-right:1px solid var(--bdr);padding:28px 20px;display:flex;flex-direction:column;position:fixed;top:0;bottom:0}}
+.brand{{font-weight:800;font-size:1.1rem;color:var(--p);letter-spacing:-.02em;margin-bottom:10px}}
+.brand-sub{{font-size:.65rem;color:var(--dim);text-transform:uppercase;letter-spacing:.1em;margin-bottom:32px}}
 .s-nav{{flex:1}}
-.s-link{{display:block;padding:12px 16px;border-radius:10px;color:var(--dim);font-weight:600;font-size:.88rem;cursor:pointer;transition:all .2s ease;margin-bottom:4px;border:1px solid transparent}}
-.s-link:hover{{background:rgba(255,255,255,0.03);color:var(--txt)}}
-.s-link.on{{background:linear-gradient(90deg, rgba(59,130,246,0.15), transparent);color:var(--p);border-left:2px solid var(--p)}}
-.s-foot{{border-top:1px solid var(--bdr);padding-top:20px;margin-top:auto}}
-.s-foot .email{{font-size:.75rem;color:var(--dim);word-break:break-all;margin-bottom:8px}}
-.s-foot a{{color:#ef4444;font-size:.78rem;font-weight:700;text-decoration:none;transition:.2s}}
-.s-foot a:hover{{color:#f87171;text-shadow:0 0 8px rgba(239,68,68,0.4)}}
-main{{margin-left:260px;flex:1;padding:40px 48px;overflow-y:auto}}
-.top{{display:flex;justify-content:space-between;align-items:center;margin-bottom:32px}}
-h1{{font-size:1.6rem;font-weight:800;letter-spacing:-.02em;color:#fff}}
-.live{{display:flex;align-items:center;gap:8px;background:rgba(16,185,129,0.1);color:#34d399;padding:6px 16px;border-radius:99px;font-size:.72rem;font-weight:700;border:1px solid rgba(16,185,129,0.2);box-shadow:0 0 12px rgba(16,185,129,0.1)}}
-.dot{{width:8px;height:8px;background:#34d399;border-radius:50%;box-shadow:0 0 8px #34d399;animation:p 2s infinite}}
-@keyframes p{{50%{{opacity:.4;box-shadow:none}}}}
-.kpis{{display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-bottom:32px}}
-.kpi{{background:var(--card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--bdr);padding:24px;border-radius:var(--r);transition:all .3s ease;box-shadow:0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)}}
-.kpi:hover{{transform:translateY(-3px);border-color:rgba(59,130,246,0.3);box-shadow:0 8px 24px rgba(0,0,0,0.2), inset 0 0 20px rgba(59,130,246,0.05)}}
-.kpi small{{display:block;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);margin-bottom:8px}}
-.kpi .v{{font-size:1.8rem;font-weight:800;color:#fff}}
-.row{{display:grid;grid-template-columns:1.7fr 1fr;gap:24px;margin-bottom:24px}}
-.c{{background:var(--card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--bdr);border-radius:var(--r);padding:24px;box-shadow:0 4px 16px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.05)}}
-.c h3{{font-size:.85rem;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;margin-bottom:20px}}
-#map{{height:420px;border-radius:12px;border:1px solid var(--bdr);background:#0f172a}}
-.ch{{height:320px}}
+.s-link{{display:block;padding:11px 14px;border-radius:8px;color:var(--dim);font-weight:600;font-size:.88rem;cursor:pointer;transition:.15s;margin-bottom:2px}}
+.s-link:hover,.s-link.on{{background:#eff6ff;color:var(--p)}}
+.s-foot{{border-top:1px solid var(--bdr);padding-top:16px;margin-top:auto}}
+.s-foot .email{{font-size:.72rem;color:var(--dim);word-break:break-all;margin-bottom:6px}}
+.s-foot a{{color:#ef4444;font-size:.75rem;font-weight:700;text-decoration:none}}
+main{{margin-left:260px;flex:1;padding:36px 40px;overflow-y:auto}}
+.top{{display:flex;justify-content:space-between;align-items:center;margin-bottom:28px}}
+h1{{font-size:1.4rem;font-weight:800;letter-spacing:-.02em}}
+.live{{display:flex;align-items:center;gap:8px;background:#f0fdf4;color:#16a34a;padding:5px 14px;border-radius:99px;font-size:.72rem;font-weight:700}}
+.dot{{width:7px;height:7px;background:#16a34a;border-radius:50%;animation:p 2s infinite}}
+@keyframes p{{50%{{opacity:.3}}}}
+.kpis{{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-bottom:28px}}
+.kpi{{background:var(--p);color:#fff;padding:22px 24px;border-radius:var(--r);transition:.2s}}
+.kpi:hover{{transform:translateY(-2px);box-shadow:0 8px 24px rgba(44,107,222,.2)}}
+.kpi small{{display:block;font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.8;margin-bottom:6px}}
+.kpi .v{{font-size:1.7rem;font-weight:800}}
+.row{{display:grid;grid-template-columns:1.7fr 1fr;gap:20px;margin-bottom:20px}}
+.c{{background:var(--card);border:1px solid var(--bdr);border-radius:var(--r);padding:22px}}
+.c h3{{font-size:.82rem;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.04em;margin-bottom:16px}}
+#map{{height:400px;border-radius:10px;border:1px solid var(--bdr)}}
+.ch{{height:300px}}
 table{{width:100%;border-collapse:collapse}}
-th{{text-align:left;padding:12px;border-bottom:1px solid var(--bdr);color:var(--dim);font-size:.72rem;text-transform:uppercase;font-weight:700;letter-spacing:.05em}}
-td{{padding:16px 12px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:.85rem;font-weight:500;color:#e2e8f0}}
-tr:hover td{{background:rgba(255,255,255,0.02)}}
-.tg{{background:rgba(59,130,246,0.15);color:#60a5fa;border:1px solid rgba(59,130,246,0.2);padding:4px 10px;border-radius:6px;font-weight:600;font-size:.72rem}}
-.bar{{display:flex;align-items:center;gap:10px}}.bar i{{height:6px;background:linear-gradient(90deg, #3b82f6, #8b5cf6);border-radius:3px;display:block;box-shadow:0 0 8px rgba(59,130,246,0.4)}}
-.empty{{text-align:center;padding:60px;color:var(--dim);font-size:.9rem;font-weight:500}}
-.tab{{display:none;animation:fade .3s ease}}.tab.on{{display:block}}
-@keyframes fade{{from{{opacity:0;transform:translateY(10px)}}to{{opacity:1;transform:translateY(0)}}}}
-.sub-tab-btn{{background:transparent;border:1px solid transparent;padding:8px 14px;font-size:.82rem;font-weight:600;color:var(--dim);cursor:pointer;border-radius:8px;transition:all .2s;display:flex;align-items:center;gap:8px}}
-.sub-tab-btn:hover{{background:rgba(255,255,255,0.05);color:var(--txt)}}
-.sub-tab-btn.on{{background:rgba(59,130,246,0.15);color:#60a5fa;border-color:rgba(59,130,246,0.2)}}
-.live-indicator-dot{{width:8px;height:8px;background:#34d399;border-radius:50%;display:inline-block;box-shadow:0 0 10px #34d399;animation:live-pulse 1.5s infinite}}
-@keyframes live-pulse{{0%{{transform:scale(.9);opacity:.7}}50%{{transform:scale(1.3);opacity:1;box-shadow:0 0 14px #34d399}}100%{{transform:scale(.9);opacity:.7}}}}
+th{{text-align:left;padding:10px;border-bottom:2px solid var(--bdr);color:var(--dim);font-size:.72rem;text-transform:uppercase;font-weight:700;letter-spacing:.03em}}
+td{{padding:14px 10px;border-bottom:1px solid #f1f5f9;font-size:.84rem;font-weight:500}}
+tr:hover td{{background:#fafbff}}
+.tg{{background:#eff6ff;color:var(--p);padding:3px 9px;border-radius:5px;font-weight:700;font-size:.7rem}}
+.bar{{display:flex;align-items:center;gap:8px}}.bar i{{height:5px;background:var(--p);border-radius:3px;display:block}}
+.empty{{text-align:center;padding:60px;color:var(--dim);font-size:.9rem}}
+.tab{{display:none}}.tab.on{{display:block}}
+.sub-tab-btn{{background:transparent;border:none;padding:6px 12px;font-size:.82rem;font-weight:700;color:var(--dim);cursor:pointer;border-radius:6px;transition:all .2s;display:flex;align-items:center;gap:6px}}
+.sub-tab-btn:hover{{background:#f1f5f9;color:var(--p)}}
+.sub-tab-btn.on{{background:var(--p);color:white}}
+.live-indicator-dot{{width:8px;height:8px;background:#10b981;border-radius:50%;display:inline-block;box-shadow:0 0 8px #10b981;animation:live-pulse 1.5s infinite}}
+@keyframes live-pulse{{0%{{transform:scale(.9);opacity:.6}}50%{{transform:scale(1.2);opacity:1;box-shadow:0 0 12px #10b981}}100%{{transform:scale(.9);opacity:.6}}}}
 </style></head>
 <body>
 <aside>
@@ -512,7 +509,7 @@ function render(totalCount){{
   heatPoints.push([co[0], co[1], n]);
  }});
  const maxSessions = Math.max(...Object.values(cc), 1);
- heat = L.heatLayer(heatPoints, {{radius: 24, blur: 20, maxZoom: 4, max: Math.min(maxSessions, 15), gradient: {{0.2: '#0ea5e9', 0.5: '#3b82f6', 0.8: '#8b5cf6', 1: '#ec4899'}}}}).addTo(mp);
+ heat = L.heatLayer(heatPoints, {{radius: 14, blur: 18, maxZoom: 4, max: Math.max(maxSessions, 5), gradient: {{0.2: '#93c5fd', 0.5: '#60a5fa', 0.8: '#2c6bde', 1: '#1e3a8a'}}}}).addTo(mp);
 
  // Time chart
  const h=Array(24).fill(0);S.forEach(s=>h[s.hour]++);
@@ -552,16 +549,16 @@ function tab(t,el){{
 }}
 
 mp=L.map('map',{{zoomControl:false}}).setView([20,0],2);
-L.tileLayer('https://{{s}}.basemaps.cartocdn.com/dark_all/{{z}}/{{x}}/{{y}}{{r}}.png', {{attribution: '&copy; CartoDB'}}).addTo(mp);
+L.tileLayer('https://{{s}}.basemaps.cartocdn.com/rastertiles/voyager/{{z}}/{{x}}/{{y}}{{r}}.png').addTo(mp);
 
 tc=new Chart(document.getElementById('tc'),{{
- type:'line',data:{{labels:[],datasets:[{{data:[],borderColor:'#3b82f6',backgroundColor:'rgba(59,130,246,0.15)',fill:true,tension:.4,borderWidth:3,pointRadius:3,pointBackgroundColor:'#0f172a',pointBorderColor:'#3b82f6',pointBorderWidth:2}}]}},
- options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{x:{{grid:{{display:false}},ticks:{{color:'#64748b',font:{{family:'Inter',size:10}}}}}},y:{{grid:{{color:'rgba(255,255,255,0.05)'}},ticks:{{color:'#64748b'}}}}}}}}
+ type:'line',data:{{labels:[],datasets:[{{data:[],borderColor:'#2c6bde',backgroundColor:'rgba(44,107,222,.08)',fill:true,tension:.4,borderWidth:2,pointRadius:2,pointBackgroundColor:'#fff',pointBorderColor:'#2c6bde'}}]}},
+ options:{{responsive:true,maintainAspectRatio:false,plugins:{{legend:{{display:false}}}},scales:{{x:{{grid:{{display:false}},ticks:{{color:'#94a3b8',font:{{family:'Inter',size:10}}}}}},y:{{grid:{{color:'#f1f5f9'}},ticks:{{color:'#94a3b8'}}}}}}}}
 }});
 
 dc=new Chart(document.getElementById('dc'),{{
- type:'doughnut',data:{{labels:[],datasets:[{{data:[],backgroundColor:['#3b82f6','#8b5cf6','#ec4899','#0ea5e9'],borderWidth:0,spacing:4,hoverOffset:4}}]}},
- options:{{responsive:true,maintainAspectRatio:false,cutout:'75%',plugins:{{legend:{{position:'bottom',labels:{{color:'#94a3b8',font:{{family:'Inter',weight:'600'}},padding:20}}}}}}}}
+ type:'doughnut',data:{{labels:[],datasets:[{{data:[],backgroundColor:['#2c6bde','#60a5fa','#93c5fd','#bfdbfe'],borderWidth:0,spacing:3}}]}},
+ options:{{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{{legend:{{position:'bottom',labels:{{color:'#64748b',font:{{family:'Inter',weight:'600'}},padding:14}}}}}}}}
 }});
 
 let currentSessionView='all';
