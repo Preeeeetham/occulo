@@ -58,21 +58,30 @@ def ensure_col(conn, tbl, col, defn):
             print(f"Schema Migration Error: Failed to add column '{col}' to '{tbl}': {e}")
 
 def init_db():
-    conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute('''CREATE TABLE IF NOT EXISTS sessions (
-            id TEXT PRIMARY KEY, country TEXT, region TEXT, device TEXT,
-            duration_sec INTEGER DEFAULT 0, date TEXT, hour INTEGER, timestamp TIMESTAMPTZ,
-            ip TEXT, path TEXT, last_event TEXT, updated_at TIMESTAMPTZ)''')
-        cur.execute('''CREATE TABLE IF NOT EXISTS inquiries (
-            id SERIAL PRIMARY KEY, name TEXT, email TEXT, message TEXT,
-            company TEXT, phone TEXT, inquiry_type TEXT,
-            country TEXT, device TEXT, timestamp TIMESTAMPTZ)''')
-    for col in ['path','last_event','updated_at','ip']: ensure_col(conn,'sessions',col,'TEXT')
-    for col in ['company','phone','inquiry_type']: ensure_col(conn,'inquiries',col,'TEXT')
-    conn.commit()
-    conn.close()
-init_db()
+    try:
+        conn = get_db()
+        with conn.cursor() as cur:
+            cur.execute('''CREATE TABLE IF NOT EXISTS sessions (
+                id TEXT PRIMARY KEY, country TEXT, region TEXT, device TEXT,
+                duration_sec INTEGER DEFAULT 0, date TEXT, hour INTEGER, timestamp TIMESTAMPTZ,
+                ip TEXT, path TEXT, last_event TEXT, updated_at TIMESTAMPTZ)''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS inquiries (
+                id SERIAL PRIMARY KEY, name TEXT, email TEXT, message TEXT,
+                company TEXT, phone TEXT, inquiry_type TEXT,
+                country TEXT, device TEXT, timestamp TIMESTAMPTZ)''')
+        for col in ['path','last_event','updated_at','ip']: ensure_col(conn,'sessions',col,'TEXT')
+        for col in ['company','phone','inquiry_type']: ensure_col(conn,'inquiries',col,'TEXT')
+        conn.commit()
+        conn.close()
+        print("Database initialized successfully.")
+    except Exception as e:
+        print(f"Warning: Database initialization failed on startup: {e}")
+
+try:
+    init_db()
+except Exception as e:
+    print(f"Warning: Failed to run init_db on module load: {e}")
+
 
 def no_store(resp):
     resp.headers['Cache-Control'] = 'no-store'
