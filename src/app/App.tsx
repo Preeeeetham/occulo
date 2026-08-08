@@ -444,18 +444,18 @@ export default function App() {
         >
 
 
-          <motion.div variants={fadeUp} className="mb-0">
+          <motion.div variants={fadeUp} className="mb-2 md:mb-4">
             <img
               src={heroLogo}
               alt="Occulo"
-              className="w-[85%] max-w-[20rem] md:max-w-[28rem] h-auto object-contain object-center mx-auto pointer-events-none relative z-20"
+              className="w-[85%] max-w-[18rem] md:max-w-[28rem] h-auto object-contain object-center mx-auto pointer-events-none relative z-20"
               style={{ mixBlendMode: "plus-lighter" }}
             />
           </motion.div>
 
           <motion.p
             variants={fadeUp}
-            className="text-[11px] font-bold tracking-[0.3em] uppercase -mt-32 mb-8 text-white/70 relative z-30"
+            className="text-[10px] md:text-[11px] font-bold tracking-[0.25em] md:tracking-[0.3em] uppercase mt-2 mb-8 text-white/80 relative z-30 px-4"
           >
             AI-powered spatial intelligence for smarter buildings
           </motion.p>
