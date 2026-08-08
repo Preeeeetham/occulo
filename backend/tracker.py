@@ -129,29 +129,28 @@ def get_payload():
 def get_geo():
     country, city = "Unknown", "Unknown"
     
-    # If geo_data was precomputed in handle_session, use it
-    if hasattr(g, 'geo_data') and g.geo_data:
-        country = g.geo_data.get('country', 'Unknown')
-        city = g.geo_data.get('city', 'Unknown')
-    else:
-        try:
-            ip, source, trusted = get_real_ip(request)
-            geo = get_geo_info(ip, source, trusted)
-            country = geo.get('country', 'Unknown')
-            city = geo.get('city', 'Unknown')
-        except Exception as e:
-            print(f"Fallback GeoIP Resolution failed: {e}")
-            
-    # Standard Cloudflare header check as secondary fallback
-    if country == "Unknown":
-        cc = request.headers.get('CF-IPCountry')
-        if cc and cc not in ['XX', 'T1']: 
-            country = cc
-            
-    if city == "Unknown":
-        city = request.headers.get('CF-IPRegion', 'Unknown')
+    # 1. Cloudflare header is authoritative for country when proxied through Cloudflare
+    cf_country = request.headers.get('CF-IPCountry')
+    if cf_country and cf_country.upper() not in ['XX', 'T1', 'UNKNOWN']:
+        country = cf_country.upper()
         
-    return country if country != "Unknown" else "US", city
+    cf_region = request.headers.get('CF-IPRegion', 'Unknown')
+
+    # 2. Perform GeoIP lookup for city and fallback country
+    try:
+        ip, source, trusted = get_real_ip(request)
+        geo = get_geo_info(ip, source, trusted)
+        if country == "Unknown":
+            country = geo.get('country', 'Unknown')
+        city = geo.get('city', 'Unknown')
+        if city == "Unknown" and cf_region != "Unknown":
+            city = cf_region
+    except Exception as e:
+        print(f"Fallback GeoIP Resolution failed: {e}")
+        if city == "Unknown":
+            city = cf_region
+            
+    return country if country != "Unknown" else "IN", city
 
 def get_device():
     ua = request.headers.get('User-Agent','').lower()
@@ -589,8 +588,15 @@ function renderSessionsTable(){{
  let st='<table><tr><th>Time</th><th>IP Address</th><th>Country</th><th>Region</th><th>Device</th><th>Last Event</th><th>Duration</th></tr>';
  filtered.slice(0,20).forEach(s=>{{
   const ts=(s.updated_at||s.timestamp||'').replace(' ','T');
-  const timeStr=ts?ts.substring(11,19):'—';
-  const isLive=ts && (now - new Date(ts)) < 60000;
+  let timeStr = '—';
+  if(ts){{
+    try {{
+      const normTs = (ts.endsWith('Z') || ts.includes('+') || (ts.includes('-') && ts.length > 19)) ? ts : ts + 'Z';
+      const d = new Date(normTs);
+      timeStr = isNaN(d) ? ts.substring(11,19) : d.toLocaleTimeString([], {{ hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }});
+    }} catch(e) {{ timeStr = ts.substring(11,19); }}
+  }}
+  const isLive=ts && (now - new Date((ts.endsWith('Z') || ts.includes('+')) ? ts : ts + 'Z')) < 60000;
   const dot=isLive?'<span class="live-indicator-dot" style="margin-right:6px"></span>':'';
   const cName = CN[s.country] || s.country;
   st+=`<tr><td>${{timeStr}}</td><td><code style="font-family:'JetBrains Mono',monospace;font-size:.78rem;background:#eff6ff;color:#2c6bde;padding:3px 6px;border-radius:4px;font-weight:700">${{s.ip||'—'}}</code></td><td><span class="tg">${{fl(s.country)}} ${{cName}}</span></td><td>${{s.region||'—'}}</td><td>${{s.device}}</td><td><div style="display:flex;align-items:center">${{dot}}<span class="tg">${{s.last_event||'pageview'}}</span></div></td><td>${{fd(s.duration_sec||0)}}</td></tr>`
