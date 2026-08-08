@@ -481,7 +481,7 @@ export default function App() {
             className="text-base md:text-lg max-w-2xl mx-auto mt-8 mb-12"
             style={{ color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}
           >
-            Occulo enables elevators to make decisions based on available space—improving safety and passenger flow without infrastructure changes.
+            Occulo enables elevators to make decisions based on available space, improving safety and passenger flow without infrastructure changes.
           </motion.p>
         </motion.div>
 

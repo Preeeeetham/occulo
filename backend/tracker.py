@@ -377,6 +377,8 @@ def dashboard():
 <html lang="en"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Occulo Instrument</title>
+<link rel="icon" type="image/png" href="https://assets.occulo.co/favicon.png">
+<link rel="shortcut icon" type="image/png" href="https://assets.occulo.co/favicon.png">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
