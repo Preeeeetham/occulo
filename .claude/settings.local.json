@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ffprobe *)"
+      "Bash(ffprobe *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Wrap beacon database operations in try-except to prevent 500 errors and add error logging. *)"
     ]
   }
 }

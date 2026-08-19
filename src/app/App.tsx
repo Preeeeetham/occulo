@@ -1,9 +1,9 @@
-import { motion, AnimatePresence } from "motion/react";
-import { useEffect, useState } from "react";
-import logoImg from "../imports/image.png";
-import heroLogo from "../imports/1.svg";
-import RLT from "../imports/RLT.png";
-import SLT from "../imports/SLT.png";
+import { motion, AnimatePresence, useScroll, useTransform, useSpring, useMotionValueEvent } from "motion/react";
+import { useEffect, useState, useRef } from "react";
+const logoImg = "https://assets.occulo.co/occulo-symbol.png";
+const heroLogo = "https://assets.occulo.co/occulo-wordmark-white.svg";
+const RLT = "https://assets.occulo.co/real-world-testing.png";
+const SLT = "https://assets.occulo.co/simulation-testing.png";
 
 import {
   Shield,
@@ -17,12 +17,16 @@ import {
   Building2,
   Users,
 } from "lucide-react";
-import { OccupancySimulation } from "./components/OccupancySimulation";
+import { MagneticButton } from "./components/MagneticButton";
+import { KineticText } from "./components/KineticText";
+import { InstitutionalBacking } from "./components/InstitutionalBacking";
 import { EfficiencySlider } from "./components/EfficiencySlider";
 import { Hero3DVisualization } from "./components/Hero3DVisualization";
 import { StrategicPartners } from "./components/StrategicPartners";
 import { DashboardShowcase } from "./components/DashboardShowcase";
 import { startPageTelemetry } from "./clientTelemetry";
+import { useSmoothScroll, smoothScrollTo } from "./hooks/useSmoothScroll";
+import { useParallax, usePageProgress, useScrollCounter } from "./hooks/useScrollAnimations";
 
 // Premium easing curves for buttery transitions
 const EASE = [0.16, 1, 0.3, 1];
@@ -144,6 +148,27 @@ export default function App() {
   });
   const [formStatus, setFormStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
 
+  // ── Smooth Scroll (Lenis) ──
+  useSmoothScroll();
+
+  // ── Nav auto-hide on scroll ──
+  const [navHidden, setNavHidden] = useState(false);
+  const { scrollY } = useScroll();
+  useMotionValueEvent(scrollY, "change", (latest) => {
+    const prev = scrollY.getPrevious() ?? 0;
+    if (latest > prev && latest > 150) setNavHidden(true);
+    else setNavHidden(false);
+  });
+
+  // ── Page scroll progress bar ──
+  const progressWidth = usePageProgress();
+
+  // ── Hero parallax ──
+  const heroParallax = useParallax(80);
+
+  // ── Validation image parallax ──
+  const valImgParallax = useParallax(60);
+
   const openContact = (inquiry: InquiryType) => {
     setFormState((prev) => ({
       ...prev,
@@ -156,7 +181,7 @@ export default function App() {
   const inquiryMeta = {
     demo: {
       title: "Request a demo",
-      subtitle: "Show us your space and we’ll route the right conversation.",
+      subtitle: "Show us your space and we'll route the right conversation.",
       showCompany: true,
       showPhone: true,
       companyRequired: false,
@@ -164,7 +189,7 @@ export default function App() {
     },
     general: {
       title: "Get in touch",
-      subtitle: "Tell us what you want to explore and we’ll route it correctly.",
+      subtitle: "Tell us what you want to explore and we'll route it correctly.",
       showCompany: true,
       showPhone: false,
       companyRequired: false,
@@ -195,9 +220,7 @@ export default function App() {
     phoneRequired: boolean;
   }>;
 
-  const scrollToContact = () => {
-    document.getElementById("contact")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const scrollToContact = () => smoothScrollTo("contact");
 
   useEffect(() => startPageTelemetry(), []);
 
@@ -246,6 +269,16 @@ export default function App() {
         * { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
+      {/* ───────── Page Scroll Progress Bar ───────── */}
+      <motion.div
+        className="fixed top-0 left-0 h-[3px] z-[200]"
+        style={{
+          width: progressWidth,
+          background: "linear-gradient(90deg, #2c6bde, #60a5fa)",
+          transformOrigin: "left",
+        }}
+      />
+
       {/* ───────── Slide-out Contact Drawer ───────── */}
       <AnimatePresence>
         {isContactOpen && (
@@ -257,7 +290,7 @@ export default function App() {
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4 }}
               className="fixed inset-0 z-[100] cursor-pointer"
-              style={{ background: "rgba(0, 0, 0, 0.4)", backdropFilter: "blur(4px)" }}
+              style={{ background: "rgba(0, 0, 0, 0.5)", backdropFilter: "blur(12px)" }}
               onClick={() => setIsContactOpen(false)}
             />
 
@@ -387,8 +420,8 @@ export default function App() {
       {/* ───────── Navigation ───────── */}
       <motion.nav
         initial={{ y: -100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 1, ease: EASE }}
+        animate={{ y: navHidden ? -100 : 0, opacity: navHidden ? 0 : 1 }}
+        transition={{ duration: 0.35, ease: [0.32, 0.72, 0, 1] }}
         className="fixed top-0 left-0 right-0 z-50 px-6 md:px-10 py-5"
         style={{
           backdropFilter: "blur(24px)",
@@ -418,16 +451,13 @@ export default function App() {
             </span>
           </motion.a>
 
-          <motion.button
+          <MagneticButton
             onClick={scrollToContact}
-            whileHover={{ scale: 1.05, backgroundColor: "#2459c0" }}
-            whileTap={{ scale: 0.95 }}
-            transition={SPRING}
-            className="px-6 py-2.5 rounded-full text-[13px] font-medium text-white shadow-sm cursor-pointer"
+            className="px-6 py-2.5 rounded-full text-[13px] font-medium text-white shadow-sm"
             style={{ background: "#2c6bde" }}
           >
             Contact
-          </motion.button>
+          </MagneticButton>
         </div>
       </motion.nav>
 
@@ -437,10 +467,12 @@ export default function App() {
         style={{ background: "#2c6bde" }}
       >
         <motion.div
+          ref={heroParallax.ref}
           className="max-w-4xl mx-auto text-center text-white pt-24 relative z-10"
           variants={staggerContainer}
           initial="hidden"
           animate="visible"
+          style={{ y: heroParallax.y }}
         >
 
 
@@ -505,8 +537,11 @@ export default function App() {
         </motion.div>
       </section>
 
+      {/* ───────── Institutional Backing Ribbon ───────── */}
+      <InstitutionalBacking />
+
       {/* ───────── The Problem ───────── */}
-      <section className="py-32 md:py-48 px-6 md:px-10" style={{ background: "#f4f4f4" }}>
+      <section className="py-28 md:py-40 px-6 md:px-10" style={{ background: "#f4f4f4" }}>
         <motion.div
           className="max-w-5xl mx-auto"
           variants={staggerContainer}
@@ -521,12 +556,11 @@ export default function App() {
             >
               The Problem
             </p>
-            <h2
-              className="text-4xl md:text-6xl font-semibold mb-6"
+            <KineticText
+              text="Elevators are blind."
+              className="text-4xl md:text-6xl font-semibold mb-6 justify-center"
               style={{ letterSpacing: "-0.035em" }}
-            >
-              Elevators are blind.
-            </h2>
+            />
             <p
               className="text-lg md:text-xl max-w-3xl mx-auto"
               style={{ color: "#666", lineHeight: 1.6 }}
@@ -590,13 +624,11 @@ export default function App() {
             >
               How It Works
             </motion.p>
-            <motion.h2
-              variants={fadeUp}
-              className="text-4xl md:text-[3.2rem] font-semibold mb-6"
+            <KineticText
+              text="A brief view of the workflow."
+              className="text-4xl md:text-[3.2rem] font-semibold mb-6 justify-center"
               style={{ letterSpacing: "-0.035em", lineHeight: 1.1 }}
-            >
-              A brief view of the workflow.
-            </motion.h2>
+            />
             <motion.p variants={fadeUp} className="text-lg md:text-xl max-w-3xl mx-auto" style={{ color: "#666", lineHeight: 1.6 }}>
               A high-level view of how we turn spatial activity into actionable intelligence.
             </motion.p>
@@ -630,15 +662,13 @@ export default function App() {
           </div>
 
           <motion.div variants={fadeUp} className="text-center mt-20">
-            <motion.button
+            <MagneticButton
               onClick={scrollToContact}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="px-10 py-4 rounded-full text-[15px] font-semibold text-white shadow-lg cursor-pointer"
+              className="px-10 py-4 rounded-full text-[15px] font-semibold text-white shadow-lg"
               style={{ background: "#2c6bde" }}
             >
               Request a pilot
-            </motion.button>
+            </MagneticButton>
           </motion.div>
         </div>
       </section>
@@ -668,9 +698,11 @@ export default function App() {
             <p className="text-[11px] font-bold tracking-[0.25em] uppercase mb-6 text-white/50">
               Built Different
             </p>
-            <h2 className="text-4xl md:text-6xl font-semibold mb-6" style={{ letterSpacing: "-0.035em" }}>
-              Built different. Deployed faster.
-            </h2>
+            <KineticText
+              text="Built different. Deployed faster."
+              className="text-4xl md:text-6xl font-semibold mb-6 justify-center text-white"
+              style={{ letterSpacing: "-0.035em" }}
+            />
             <p className="text-lg md:text-xl max-w-2xl mx-auto text-white/70" style={{ lineHeight: 1.6 }}>
               Where others can take months and lakhs, Occulo is designed for faster deployment and lower rollout
               friction.
@@ -723,42 +755,90 @@ export default function App() {
               <p className="text-[11px] font-bold tracking-[0.25em] uppercase mb-4" style={{ color: "#2c6bde" }}>
                 Validation
               </p>
-              <h2 className="text-3xl md:text-5xl font-semibold mb-6 max-w-lg" style={{ letterSpacing: "-0.03em" }}>
-                Readiness is part of the story.
-              </h2>
+              <KineticText
+                text="Readiness is part of the story."
+                className="text-3xl md:text-5xl font-semibold mb-6 max-w-lg"
+                style={{ letterSpacing: "-0.03em" }}
+              />
               <p className="text-lg md:text-xl mb-10 max-w-lg" style={{ color: "#666", lineHeight: 1.6 }}>
                 Validated performance in field testing for stakeholder evaluation.
               </p>
             </motion.div>
 
-            <div className="grid md:grid-cols-1 gap-4">
-              {validationCards.map((item) => (
-                <motion.div
-                  key={item.label}
-                  variants={fadeUp}
-                  className="rounded-3xl bg-white p-6 flex flex-col gap-3"
-                  style={{
-                    border: "1px solid rgba(0,0,0,0.04)",
-                    boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
-                  }}
-                >
-                  <div className="text-xl font-semibold text-[#2c6bde]" style={{ letterSpacing: "-0.02em" }}>
-                    {item.label}
-                  </div>
-                  <div className="text-[14px] max-w-sm" style={{ color: "#666", lineHeight: 1.6 }}>
-                    {item.desc}
-                  </div>
-                </motion.div>
-              ))}
+            <div className="grid md:grid-cols-3 gap-4">
+              {/* TRL Card */}
+              <motion.div
+                variants={fadeUp}
+                whileHover={{ y: -6, boxShadow: "0 20px 40px rgba(0,0,0,0.06)" }}
+                className="rounded-3xl bg-white p-6 flex flex-col gap-2"
+                style={{
+                  border: "1px solid rgba(0,0,0,0.04)",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[#2c6bde]">TRL</span>
+                  <span className="text-4xl font-bold text-[#2c6bde] tracking-tight">
+                    7
+                  </span>
+                </div>
+                <div className="text-[14px] max-w-sm" style={{ color: "#666", lineHeight: 1.6 }}>
+                  SPADES has reached live demonstration stage in operational environments.
+                </div>
+              </motion.div>
+
+              {/* MRL Card */}
+              <motion.div
+                variants={fadeUp}
+                whileHover={{ y: -6, boxShadow: "0 20px 40px rgba(0,0,0,0.06)" }}
+                className="rounded-3xl bg-white p-6 flex flex-col gap-2"
+                style={{
+                  border: "1px solid rgba(0,0,0,0.04)",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[11px] font-bold tracking-[0.2em] uppercase text-[#2c6bde]">MRL</span>
+                  <span className="text-4xl font-bold text-[#2c6bde] tracking-tight">
+                    8
+                  </span>
+                </div>
+                <div className="text-[14px] max-w-sm" style={{ color: "#666", lineHeight: 1.6 }}>
+                  Manufacturing processes have moved beyond lab-only intent and into buildable form.
+                </div>
+              </motion.div>
+
+              {/* Accuracy Card */}
+              <motion.div
+                variants={fadeUp}
+                whileHover={{ y: -6, boxShadow: "0 20px 40px rgba(0,0,0,0.06)" }}
+                className="rounded-3xl bg-white p-6 flex flex-col gap-2"
+                style={{
+                  border: "1px solid rgba(0,0,0,0.04)",
+                  boxShadow: "0 10px 30px rgba(0,0,0,0.04)",
+                }}
+              >
+                <div className="flex items-baseline gap-0.5">
+                  <span className="text-4xl font-bold text-[#2c6bde] tracking-tight">
+                    95
+                  </span>
+                  <span className="text-xl font-bold text-[#2c6bde]">%</span>
+                </div>
+                <div className="text-[14px] max-w-sm" style={{ color: "#666", lineHeight: 1.6 }}>
+                  SPADES demonstrated this result in field testing under real-world conditions.
+                </div>
+              </motion.div>
             </div>
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: 20 }}
-            whileInView={{ opacity: 1, scale: 1, y: 0 }}
+            ref={valImgParallax.ref}
+            initial={{ opacity: 0, scale: 0.96 }}
+            whileInView={{ opacity: 1, scale: 1 }}
             viewport={{ once: true, margin: "-10%" }}
             transition={{ duration: 1, ease: EASE }}
             className="relative flex flex-col gap-6"
+            style={{ y: valImgParallax.y }}
           >
             <div className="absolute inset-0 bg-[#2c6bde] opacity-10 blur-3xl rounded-full transform scale-110" />
 
@@ -794,9 +874,11 @@ export default function App() {
             <p className="text-[11px] font-bold tracking-[0.25em] uppercase mb-4" style={{ color: "#2c6bde" }}>
               Who It Is For
             </p>
-            <h2 className="text-3xl md:text-5xl font-semibold mb-6" style={{ letterSpacing: "-0.03em" }}>
-              Choose your path.
-            </h2>
+            <KineticText
+              text="Choose your path."
+              className="text-3xl md:text-5xl font-semibold mb-6 justify-center"
+              style={{ letterSpacing: "-0.03em" }}
+            />
             <p className="text-lg md:text-xl max-w-2xl mx-auto" style={{ color: "#666", lineHeight: 1.6 }}>
               Direct engagement paths for both enterprise partners and residential stakeholders.
             </p>
@@ -875,15 +957,11 @@ export default function App() {
           >
           </motion.p>
 
-          <motion.h2
-            variants={fadeUp}
-            className="text-4xl md:text-[4.5rem] font-semibold text-white mb-8"
+          <KineticText
+            text="Ready to start the conversation?"
+            className="text-4xl md:text-[4.5rem] font-semibold text-white mb-8 justify-center"
             style={{ letterSpacing: "-0.035em", lineHeight: 1.05 }}
-          >
-            Ready to start
-            <br />
-            the conversation?
-          </motion.h2>
+          />
 
           <motion.p
             variants={fadeUp}
@@ -894,17 +972,14 @@ export default function App() {
           </motion.p>
 
           <motion.div variants={fadeUp} className="mb-20">
-            <motion.button
+            <MagneticButton
               onClick={() => openContact("general")}
-              whileHover={{ scale: 1.04, boxShadow: "0 0 40px rgba(44,107,222,0.4)" }}
-              whileTap={{ scale: 0.96 }}
-              transition={SPRING}
-              className="inline-flex items-center gap-2 px-10 py-4 rounded-full text-[15px] font-semibold text-white cursor-pointer"
+              className="inline-flex items-center gap-2 px-10 py-4 rounded-full text-[15px] font-semibold text-white"
               style={{ background: "#2c6bde" }}
             >
               Contact us
               <ArrowRight size={18} />
-            </motion.button>
+            </MagneticButton>
           </motion.div>
 
           {/* Unified Footer bar */}
