@@ -17,6 +17,13 @@ const credentials: CredentialItem[] = [
     imgClass: "h-8 md:h-9 max-w-[130px] md:max-w-[150px] w-auto",
   },
   {
+    category: "Accelerated by",
+    name: "NASSCOM",
+    logo: "https://assets.occulo.co/nasscom-logo.png",
+    alt: "NASSCOM",
+    imgClass: "h-5 md:h-6 max-w-[130px] md:max-w-[150px] w-auto",
+  },
+  {
     category: "Recognised by",
     name: "DPIIT",
     logo: "https://assets.occulo.co/dpiit-startup-india-logo.png",
@@ -29,13 +36,6 @@ const credentials: CredentialItem[] = [
     logo: "https://assets.occulo.co/msme-logo.png",
     alt: "Ministry of MSME, Govt. of India",
     imgClass: "h-9 md:h-10 max-w-[130px] md:max-w-[155px] w-auto",
-  },
-  {
-    category: "Recognised by",
-    name: "NASSCOM",
-    logo: "https://assets.occulo.co/nasscom-logo.png",
-    alt: "NASSCOM",
-    imgClass: "h-5 md:h-6 max-w-[130px] md:max-w-[150px] w-auto",
   },
   {
     category: "Part of",
