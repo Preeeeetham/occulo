@@ -19,9 +19,9 @@ const credentials: CredentialItem[] = [
   {
     category: "Accelerated by",
     name: "NASSCOM",
-    logo: "https://assets.occulo.co/nasscom-logo.png",
+    logo: "https://assets.occulo.co/nasscom-logo.svg",
     alt: "NASSCOM",
-    imgClass: "h-5 md:h-6 max-w-[130px] md:max-w-[150px] w-auto",
+    imgClass: "h-8 md:h-9 max-w-[130px] md:max-w-[155px] w-auto",
   },
   {
     category: "Recognised by",
