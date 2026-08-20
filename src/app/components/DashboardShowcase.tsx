@@ -132,7 +132,10 @@ export function DashboardShowcase() {
                     <div className="w-2.5 h-2.5 rounded-full bg-[#27c93f]" />
                   </div>
                 </div>
-                <div className="aspect-video bg-black overflow-hidden relative">
+                <div 
+                  className="w-full bg-black overflow-hidden relative"
+                  style={{ aspectRatio: "3840 / 1728" }}
+                >
                   <video
                     ref={videoRef}
                     src="https://assets.occulo.co/SaaS.mp4"
@@ -145,7 +148,7 @@ export function DashboardShowcase() {
                     onContextMenu={(e) => e.preventDefault()}
                     className="w-full h-full object-cover pointer-events-none"
                   />
-                  <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_60px_rgba(0,0,0,0.6)]" />
+                  <div className="absolute inset-0 pointer-events-none shadow-[inset_0_0_30px_rgba(0,0,0,0.3)]" />
                 </div>
               </motion.div>
             </div>
