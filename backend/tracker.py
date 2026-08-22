@@ -292,13 +292,39 @@ def beacon():
 @app.route('/_o/inquiry', methods=['POST'])
 def inquiry():
     d = get_payload()
+    ip, _, _ = get_real_ip(request)
+    sid = d.get('sid') or session.get('session_id') or ip
+
+    # 1. 5-Minute Rate Limit per Session / IP (300 seconds)
+    rate_key = f"rate:inquiry:{sid}"
+    if redis_cache:
+        try:
+            if redis_cache.get(rate_key):
+                return jsonify({"ok": False, "error": "Please wait 5 minutes before submitting another inquiry."}), 429
+            redis_cache.setex(rate_key, 300, "1")
+        except Exception as e:
+            print(f"Redis rate limit check error: {e}")
+
+    # 2. Enforce 800-character limit on message and length bounds on string fields
+    raw_message = (d.get('message') or '').strip()[:800]
+
+    name = (d.get('name') or '')[:100].strip()
+    email = (d.get('email') or '')[:150].strip()
+    company = (d.get('company') or '')[:150].strip()
+    phone = (d.get('phone') or '')[:50].strip()
+    inquiry_type = (d.get('inquiry_type') or 'general')[:50].strip()
+
     country, _ = get_geo()
     conn = get_db()
-    with conn.cursor() as cur:
-        cur.execute('INSERT INTO inquiries (name,email,message,company,phone,inquiry_type,country,device,timestamp) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
-            (d.get('name'), d.get('email'), d.get('message'), d.get('company'), d.get('phone'), d.get('inquiry_type'), country, get_device(), datetime.now(timezone.utc).isoformat()))
-        conn.commit()
-    conn.close()
+    try:
+        with conn.cursor() as cur:
+            cur.execute('INSERT INTO inquiries (name,email,message,company,phone,inquiry_type,country,device,timestamp) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
+                (name, email, raw_message, company, phone, inquiry_type, country, get_device(), datetime.now(timezone.utc).isoformat()))
+            conn.commit()
+    except Exception as e:
+        print(f"Database error inserting inquiry: {e}")
+    finally:
+        conn.close()
 
     # Trigger EmailJS via Backend HTTP Request
     try:
@@ -314,12 +340,12 @@ def inquiry():
                 "user_id": public_key,
                 "accessToken": private_key,
                 "template_params": {
-                    "name": d.get('name', 'Unknown'),
-                    "email": d.get('email', 'No Email'),
-                    "inquiry_type": d.get('inquiry_type', 'General'),
-                    "message": d.get('message', ''),
-                    "company": d.get('company', 'None'),
-                    "phone": d.get('phone', 'None'),
+                    "name": name or 'Unknown',
+                    "email": email or 'No Email',
+                    "inquiry_type": inquiry_type or 'General',
+                    "message": raw_message,
+                    "company": company or 'None',
+                    "phone": phone or 'None',
                     "country": country
                 }
             }
@@ -492,6 +518,7 @@ const CN={{"US":"United States","GB":"United Kingdom","IN":"India","DE":"Germany
 const CC={{US:[37,-95],GB:[55,-2],IN:[20,78],DE:[51,9],FR:[46,2],CA:[56,-106],AU:[-25,133],JP:[36,138],BR:[-14,-51],SG:[1,103],AE:[24,54],NL:[52,5],HK:[22,114],SE:[62,15],KR:[36,128],IT:[42,12],ES:[40,-4],RU:[61,105],CN:[35,105],ZA:[-30,25],MX:[23,-102],ID:[-5,120],MY:[4,101],TH:[15,100],PK:[30,69],TR:[39,35],PL:[52,20],SA:[24,45],NZ:[-41,174],FI:[64,26],NO:[62,10],CH:[47,8],IE:[53,-8],TW:[24,121],PH:[12,121],AR:[-38,-63],CL:[-35,-71],CO:[4,-74],EG:[26,30],NG:[9,8],KE:[0,37],VN:[14,108],BD:[23,90],UA:[48,31],RO:[45,24],BE:[50,4],AT:[47,14],PT:[39,-8],GR:[39,22],CZ:[49,15],HU:[47,19],DK:[56,9],IL:[31,34]}};
 function fl(c){{try{{return c.replace(/./g,x=>String.fromCodePoint(127397+x.charCodeAt()))}}catch{{return c}}}}
 function fd(s){{return s<60?s+'s':Math.floor(s/60)+'m '+(s%60)+'s'}}
+function esc(s){{if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}}
 
 async function load(){{
  try{{
@@ -536,7 +563,7 @@ function render(totalCount){{
  let gt='<table><tr><th>Country</th><th>Sessions</th><th>Share</th></tr>';
  sorted.forEach(([c,n])=>{{
   const cName = CN[c] || c;
-  gt+=`<tr><td>${{fl(c)}} ${{cName}}</td><td><div class="bar"><i style="width:${{n/mx*80}}px"></i>${{n}}</div></td><td>${{(n/S.length*100).toFixed(1)}}%</td></tr>`;
+  gt+=`<tr><td>${{fl(c)}} ${{esc(cName)}}</td><td><div class="bar"><i style="width:${{n/mx*80}}px"></i>${{n}}</div></td><td>${{(n/S.length*100).toFixed(1)}}%</td></tr>`;
  }});
  document.getElementById('geo').innerHTML=sorted.length?gt+'</table>':'<div class="empty">No geographic data yet</div>';
 
@@ -545,7 +572,7 @@ function render(totalCount){{
 
  // Leads table
  let lt='<table><tr><th>Name</th><th>Email</th><th>Type</th><th>Message</th></tr>';
- I.forEach(i=>{{lt+=`<tr><td>${{i.name||'—'}}</td><td>${{i.email||'—'}}</td><td><span class="tg">${{i.inquiry_type||'general'}}</span></td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${{i.message||''}}</td></tr>`}});
+ I.forEach(i=>{{lt+=`<tr><td>${{esc(i.name||'—')}}</td><td>${{esc(i.email||'—')}}</td><td><span class="tg">${{esc(i.inquiry_type||'general')}}</span></td><td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${{esc(i.message||'')}}</td></tr>`}});
  document.getElementById('lt').innerHTML=I.length?lt+'</table>':'<div class="empty">No leads captured yet</div>';
 }}
 
@@ -601,7 +628,7 @@ function renderSessionsTable(){{
   const isLive=ts && (now - new Date((ts.endsWith('Z') || ts.includes('+')) ? ts : ts + 'Z')) < 60000;
   const dot=isLive?'<span class="live-indicator-dot" style="margin-right:6px"></span>':'';
   const cName = CN[s.country] || s.country;
-  st+=`<tr><td>${{timeStr}}</td><td><code style="font-family:'JetBrains Mono',monospace;font-size:.78rem;background:#eff6ff;color:#2c6bde;padding:3px 6px;border-radius:4px;font-weight:700">${{s.ip||'—'}}</code></td><td><span class="tg">${{fl(s.country)}} ${{cName}}</span></td><td>${{s.region||'—'}}</td><td>${{s.device}}</td><td><div style="display:flex;align-items:center">${{dot}}<span class="tg">${{s.last_event||'pageview'}}</span></div></td><td>${{fd(s.duration_sec||0)}}</td></tr>`
+  st+=`<tr><td>${{timeStr}}</td><td><code style="font-family:'JetBrains Mono',monospace;font-size:.78rem;background:#eff6ff;color:#2c6bde;padding:3px 6px;border-radius:4px;font-weight:700">${{esc(s.ip||'—')}}</code></td><td><span class="tg">${{fl(s.country)}} ${{esc(cName)}}</span></td><td>${{esc(s.region||'—')}}</td><td>${{esc(s.device||'')}}</td><td><div style="display:flex;align-items:center">${{dot}}<span class="tg">${{esc(s.last_event||'pageview')}}</span></div></td><td>${{fd(s.duration_sec||0)}}</td></tr>`
  }});
  const emptyMsg=currentSessionView==='live'?'No active visitors online right now':'Awaiting first visitor on occulo.co';
  document.getElementById('st').innerHTML=filtered.length?st+'</table>':`<div class="empty">${{emptyMsg}}</div>`;

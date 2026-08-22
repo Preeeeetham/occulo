@@ -147,6 +147,7 @@ export default function App() {
     message: "",
   });
   const [formStatus, setFormStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [formErrorMessage, setFormErrorMessage] = useState("");
 
   // ── Smooth Scroll (Lenis) ──
   useSmoothScroll();
@@ -159,6 +160,30 @@ export default function App() {
     if (latest > prev && latest > 150) setNavHidden(true);
     else setNavHidden(false);
   });
+
+  // ── Asset Copy & Drag Protection ──
+  useEffect(() => {
+    const handleContextMenu = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("img, video, canvas, svg, picture, [data-protected-asset]")) {
+        e.preventDefault();
+      }
+    };
+
+    const handleDragStart = (e: DragEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest("img, video, canvas, svg, picture, [data-protected-asset]")) {
+        e.preventDefault();
+      }
+    };
+
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("dragstart", handleDragStart);
+    return () => {
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("dragstart", handleDragStart);
+    };
+  }, []);
 
   // ── Page scroll progress bar ──
   const progressWidth = usePageProgress();
@@ -175,6 +200,8 @@ export default function App() {
       inquiry,
       ...(inquiry === "b2c" ? { company: "", phone: "" } : {}),
     }));
+    setFormErrorMessage("");
+    setFormStatus("idle");
     setIsContactOpen(true);
   };
 
@@ -226,9 +253,28 @@ export default function App() {
 
   const handleEmailSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setFormErrorMessage("");
+
+    // 1. Validate 800-character limit on message
+    if (formState.message.length > 800) {
+      setFormErrorMessage("Message cannot exceed 800 characters.");
+      setFormStatus("error");
+      return;
+    }
+
+    // 2. Client-side 5-minute rate limit check (300,000 ms)
+    const lastSent = Number(sessionStorage.getItem("occulo_last_inquiry_time") || 0);
+    if (lastSent && Date.now() - lastSent < 300000) {
+      const remainingMinutes = Math.ceil((300000 - (Date.now() - lastSent)) / 60000);
+      setFormErrorMessage(`Please wait ${remainingMinutes} minute${remainingMinutes > 1 ? "s" : ""} before submitting another inquiry.`);
+      setFormStatus("error");
+      return;
+    }
+
     setFormStatus("loading");
 
     try {
+      const sid = sessionStorage.getItem("occulo_session_id") || undefined;
       const res = await fetch(INQUIRY_ENDPOINT, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -239,14 +285,18 @@ export default function App() {
           company: formState.company,
           phone: formState.phone,
           inquiry_type: formState.inquiry,
+          sid,
         }),
       });
 
       if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        setFormErrorMessage(errorData.error || "Failed to send message. Please try again.");
         setFormStatus("error");
         return;
       }
 
+      sessionStorage.setItem("occulo_last_inquiry_time", String(Date.now()));
       setFormStatus("success");
       setTimeout(() => {
         setIsContactOpen(false);
@@ -254,19 +304,29 @@ export default function App() {
         setFormState({ name: "", email: "", phone: "", company: "", inquiry: "general", message: "" });
       }, 2500);
     } catch {
+      setFormErrorMessage("Failed to send message. Please try again.");
       setFormStatus("error");
     }
   };
 
   return (
     <div
-      className="min-h-screen overflow-x-hidden selection:bg-[#2c6bde] selection:text-white"
+      className="min-h-screen overflow-x-hidden selection:bg-white selection:text-[#2c6bde]"
       style={{ fontFamily: "'Inter', sans-serif", color: "#111" }}
     >
-      {/* Hide main browser scrollbar globally for premium app feel */}
+      {/* Hide main browser scrollbar globally for premium app feel & custom selection/asset protection */}
       <style>{`
         ::-webkit-scrollbar { display: none; }
         * { -ms-overflow-style: none; scrollbar-width: none; }
+        ::selection, *::selection { background-color: #ffffff !important; color: #2c6bde !important; }
+        ::-moz-selection, *::-moz-selection { background-color: #ffffff !important; color: #2c6bde !important; }
+        img, video, svg, canvas, picture {
+          -webkit-user-drag: none !important;
+          user-drag: none !important;
+          user-select: none !important;
+          -webkit-user-select: none !important;
+          -webkit-touch-callout: none !important;
+        }
       `}</style>
 
       {/* ───────── Page Scroll Progress Bar ───────── */}
@@ -385,18 +445,26 @@ export default function App() {
                       )}
 
                       <div>
-                        <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-2">Message</label>
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">Message</label>
+                          <span className={`text-[11px] ${formState.message.length > 800 ? "text-red-500 font-bold" : "text-gray-400"}`}>
+                            {formState.message.length} / 800 characters
+                          </span>
+                        </div>
                         <textarea
                           rows={4}
+                          maxLength={800}
                           value={formState.message}
                           onChange={(e) => setFormState({ ...formState, message: e.target.value })}
-                          placeholder="Tell us what you want to explore."
-                          className="w-full py-3 border-b border-gray-200 outline-none focus:border-[#2c6bde] transition-colors bg-transparent placeholder:text-gray-300 resize-none"
+                          placeholder="Tell us what you want to explore (max 800 characters)."
+                          className="w-full py-3 border-b border-gray-200 outline-none focus:border-[#2c6bde] transition-colors bg-transparent placeholder:text-gray-300 resize-none break-words"
                         />
                       </div>
 
                       {formStatus === "error" && (
-                        <div className="text-red-500 text-sm mt-2">Failed to send message. Please try again.</div>
+                        <div className="text-red-500 text-sm mt-2 font-medium">
+                          {formErrorMessage || "Failed to send message. Please try again."}
+                        </div>
                       )}
 
                       <motion.button
@@ -489,7 +557,7 @@ export default function App() {
             variants={fadeUp}
             className="text-[10px] md:text-[11px] font-bold tracking-[0.25em] md:tracking-[0.3em] uppercase mt-2 mb-8 text-white/80 relative z-30 px-4"
           >
-            AI-powered spatial intelligence for smarter buildings
+            AI-powered spatial intelligence for high-density public spaces & infrastructure
           </motion.p>
 
           <motion.h1
@@ -501,11 +569,11 @@ export default function App() {
               letterSpacing: "-0.03em",
               fontWeight: 700,
               textWrap: "balance",
-              maxWidth: "16ch",
+              maxWidth: "20ch",
               margin: "0 auto",
             }}
           >
-            Real-Time Reduction in Elevator Overcrowding & Wait Times
+            Real Time Reduction in Public Overcrowding and Increase in Safety and Efficiency
           </motion.h1>
 
           <motion.p
@@ -513,7 +581,7 @@ export default function App() {
             className="text-base md:text-lg max-w-2xl mx-auto mt-8 mb-12"
             style={{ color: "rgba(255,255,255,0.75)", lineHeight: 1.6 }}
           >
-            Occulo enables elevators to make decisions based on available space, improving safety and passenger flow without infrastructure changes.
+            Occulo gives public infrastructure real-time spatial intelligence by eliminating overcrowding and maximizing safety without structural changes.
           </motion.p>
         </motion.div>
 
