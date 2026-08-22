@@ -152,7 +152,7 @@ export function DashboardShowcase() {
                   style={{ aspectRatio: "3840 / 1728" }}
                 >
                   <video
-                    src="/SaaS.mp4"
+                    src="https://assets.occulo.co/SaaS.mp4"
                     autoPlay
                     muted
                     loop
@@ -243,7 +243,7 @@ export function DashboardShowcase() {
                   style={{ aspectRatio: "1920 / 862" }}
                 >
                   <video
-                    src="/SPADES_drone.mp4"
+                    src="https://assets.occulo.co/SPADES_drone.mp4"
                     autoPlay
                     muted
                     loop
