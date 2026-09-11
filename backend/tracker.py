@@ -213,7 +213,9 @@ def serve_logo():
     # Serve the exact white logo used in the frontend hero section
     from flask import send_file
     import os
-    logo_path = os.path.join(os.path.dirname(__file__), '../src/imports/1.svg')
+    logo_path = os.path.join(os.path.dirname(__file__), 'static', '1.svg')
+    if not os.path.exists(logo_path):
+        logo_path = os.path.join(os.path.dirname(__file__), '../src/imports/1.svg')
     if os.path.exists(logo_path):
         return send_file(logo_path, mimetype='image/svg+xml')
     return "Not found", 404
